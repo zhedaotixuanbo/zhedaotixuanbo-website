@@ -5,7 +5,7 @@ export const announcementConfig: AnnouncementConfig = {
 	title: "公告",
 
 	// 公告内容
-	content: "『重启能解决 $99%$ 的问题』",
+	content: "『重启能解决 99% 的问题』",
 
 	// 是否允许用户关闭公告
 	closable: true,
