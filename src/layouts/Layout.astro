@@ -9,6 +9,7 @@ import FontSetup from "@components/features/FontSetup.astro";
 import MusicManager from "@components/features/MusicManager.astro";
 import MusicPlayerView from "@components/features/MusicPlayerView.astro";
 import SakuraEffect from "@components/features/SakuraEffect.astro";
+import AdminPanel from "@/components/admin/AdminPanel.astro";
 import ConfigCarrier from "@components/layout/ConfigCarrier.astro";
 
 import {
@@ -634,6 +635,9 @@ const siteLang = lang.replace("_", "-");
 
     <!-- Tab 代码块交互 -->
     <CodeGroupManager />
+
+    <!-- 管理员认证面板 -->
+    <AdminPanel />
   </body>
 </html>
 

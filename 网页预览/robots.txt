@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /_astro/
+
+Sitemap: https://zhedaotixuanbo.pages.dev/sitemap-index.xml

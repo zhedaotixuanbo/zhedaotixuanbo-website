@@ -1,0 +1,11 @@
+---
+import MainGridLayout from "@/layouts/MainGridLayout.astro";
+import PostManager from "@/components/admin/PostManager.svelte";
+---
+
+<MainGridLayout title="文章管理" description="管理员文章管理">
+  <meta slot="head" name="robots" content="noindex, nofollow" />
+  <div class="w-full">
+    <PostManager client:load />
+  </div>
+</MainGridLayout>

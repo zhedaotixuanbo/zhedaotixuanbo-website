@@ -1,0 +1,11 @@
+---
+import MainGridLayout from "@/layouts/MainGridLayout.astro";
+import PostEditor from "@/components/admin/PostEditor.svelte";
+---
+
+<MainGridLayout title="新建文章" description="管理员文章编辑器">
+  <meta slot="head" name="robots" content="noindex, nofollow" />
+  <div class="w-full">
+    <PostEditor client:load />
+  </div>
+</MainGridLayout>

@@ -1,0 +1,125 @@
+﻿[2m18:07:32[22m [34m[vite][39m Re-optimizing dependencies because vite config has changed
+[2m18:07:33[22m [34m[vite][39m [optimizer] bundling dependencies...
+[2m18:07:35[22m [34m[content][39m Syncing content
+[2m18:07:38[22m [34m[content][39m Synced content
+[2m18:07:38[22m [34m[types][39m Generated [2m6.46s[22m
+[2m18:07:38[22m [34m[build][39m output: [34m"static"[39m
+[2m18:07:38[22m [34m[build][39m mode: [34m"static"[39m
+[2m18:07:38[22m [34m[build][39m directory: [34mD:\zhedaotixuanbowebsite\zhedaotixuanbo-website\dist\[39m
+[2m18:07:38[22m [34m[build][39m Collecting build info...
+[2m18:07:38[22m [34m[build][39m [32m✓ Completed in 7.34s.[39m
+[2m18:07:38[22m [34m[build][39m Building static entrypoints...
+[2m18:07:59[22m [34m[assets][39m Copying fonts (22 files)...
+[2m18:08:04[22m [34m[vite][39m [32m✓ built in 24.73s[39m
+[33m[1m18:08:06[22m [WARN] [vite][39m [33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[2m18:08:06[22m [34m[vite][39m [32m✓ built in 2.69s[39m
+[2m18:08:06[22m [34m[build][39m Rearranging server assets...
+
+[42m[30m generating static routes [39m[49m
+[2m18:08:11[22m   [34m├─[39m [2m/404.html[22m [2m(+193ms)[22m 
+[2m18:08:11[22m   [34m├─[39m [2m/about/index.html[22m [2m(+65ms)[22m 
+[2m18:08:11[22m   [34m├─[39m [2m/anime/index.html[22m[Anime] Fetching Bilibili list for UID: 38932988...
+[Anime] Fetched 771 items from Bilibili (anime: 710, drama: 61).
+ [31m(+670ms)[39m 
+[2m18:08:12[22m   [34m├─[39m [2m/api/allPostMeta.json[22m [2m(+11ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/api/dynamic.json[22m [2m(+38ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/archive/index.html[22m [2m(+72ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/bangumi/index.html[22m [2m(+62ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/booknav/index.html[22m [2m(+62ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/categories/index.html[22m [2m(+88ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/dynamic/comments/index.html[22m [2m(+30ms)[22m 
+[2m18:08:12[22m   [34m├─[39m [2m/dynamic/index.html[22m [2m(+138ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/friends/index.html[22m [2m(+104ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/gallery/firefly-2026/index.html[22m [2m(+189ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/gallery/encrypted-test/index.html[22m [2m(+150ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/gallery/index.html[22m [2m(+53ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/guestbook/index.html[22m [2m(+71ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/posts/firefly/index.html[22m [2m(+129ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/posts/guide/index.html[22m [2m(+63ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/posts/code-examples/index.html[22m [2m(+81ms)[22m 
+[2m18:08:13[22m   [34m├─[39m [2m/posts/guide/firefly-layout-system/index.html[22m [2m(+261ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/guide/firefly-wiki-link/index.html[22m [2m(+65ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/encrypted-demo/index.html[22m [2m(+166ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/katex-math-example/index.html[22m [2m(+48ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/mdx-example/index.html[22m [2m(+99ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/markdown-extended/index.html[22m [2m(+77ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/markdown-mermaid/index.html[22m [2m(+72ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/markdown-plantuml/index.html[22m [2m(+63ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/markdown-tutorial/index.html[22m [2m(+91ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/posts/video/index.html[22m [2m(+52ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/robots.txt[22m [2m(+20ms)[22m 
+[2m18:08:14[22m   [34m├─[39m [2m/rss/index.html[22m [2m(+238ms)[22m 
+[2m18:08:15[22m   [34m├─[39m [2m/rss.xml[22m [31m(+2.36s)[39m 
+[2m18:08:17[22m   [34m├─[39m [2m/search/index.html[22m [2m(+47ms)[22m 
+[2m18:08:17[22m   [34m├─[39m [2m/sponsor/index.html[22m [2m(+44ms)[22m 
+[2m18:08:17[22m   [34m├─[39m [2m/tags/index.html[22m [2m(+38ms)[22m 
+[2m18:08:17[22m   [34m├─[39m [2m/vndb/index.html[22m [2m(+55ms)[22m 
+[2m18:08:17[22m   [34m├─[39m [2m/index.html[22m [2m(+58ms)[22m 
+[2m18:08:17[22m   [34m├─[39m [2m/2/index.html[22m [2m(+46ms)[22m 
+[2m18:08:17[22m [32m✓ Completed in 10.66s.
+[39m
+[42m[30m generating optimized images [39m[49m
+[2m18:08:19[22m   [32m▶[39m /_astro/firefly-dark.b7MsfgPt_RPm6p.webp [2m(before: 4kB, after: 0kB)[22m [2m(+1.56s)[22m [2m(1/54)[22m
+[2m18:08:19[22m   [32m▶[39m /_astro/firefly-light.DZ-mS7Sc_Z4p5YL.webp [2m(before: 3kB, after: 0kB)[22m [2m(+1.56s)[22m [2m(2/54)[22m
+[2m18:08:19[22m   [32m▶[39m /_astro/m5.D_Epxsab_MipJw.webp [2m(before: 250kB, after: 60kB)[22m [2m(+1.56s)[22m [2m(3/54)[22m
+[2m18:08:19[22m   [32m▶[39m /_astro/m4.BH-lD-3t_ZKFJHX.webp [2m(before: 246kB, after: 59kB)[22m [2m(+1.56s)[22m [2m(4/54)[22m
+[2m18:08:19[22m   [32m▶[39m /_astro/m1.DqqgjsGn_ZOjiWI.webp [2m(before: 299kB, after: 71kB)[22m [2m(+1.56s)[22m [2m(5/54)[22m
+[2m18:08:20[22m   [32m▶[39m /_astro/m3.DGa_nZZV_2f7R4K.webp [2m(before: 240kB, after: 64kB)[22m [2m(+2.51s)[22m [2m(6/54)[22m
+[2m18:08:20[22m   [32m▶[39m /_astro/firefly-dark.b7MsfgPt_1Ub8hw.webp [2m(before: 4kB, after: 1kB)[22m [2m(+1.14s)[22m [2m(7/54)[22m
+[2m18:08:20[22m   [32m▶[39m /_astro/firefly-light.DZ-mS7Sc_Z1n8zmu.webp [2m(before: 3kB, after: 1kB)[22m [2m(+1.14s)[22m [2m(8/54)[22m
+[2m18:08:20[22m   [32m▶[39m /_astro/m6.BY42_Be2_2gmeme.webp [2m(before: 238kB, after: 65kB)[22m [2m(+2.70s)[22m [2m(9/54)[22m
+[2m18:08:20[22m   [32m▶[39m /_astro/m2.B5kTqdCO_1mllz8.webp [2m(before: 294kB, after: 66kB)[22m [2m(+2.71s)[22m [2m(10/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/m5.D_Epxsab_Ti2zl.webp [2m(before: 250kB, after: 91kB)[22m [2m(+1.89s)[22m [2m(11/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/firefly-dark.b7MsfgPt_Zr6Cr1.webp [2m(before: 4kB, after: 2kB)[22m [2m(+769ms)[22m [2m(12/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/m1.DqqgjsGn_ZHjG7T.webp [2m(before: 299kB, after: 105kB)[22m [2m(+1.91s)[22m [2m(13/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/firefly-light.DZ-mS7Sc_Z3pH8y.webp [2m(before: 3kB, after: 2kB)[22m [2m(+770ms)[22m [2m(14/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/m4.BH-lD-3t_ZDG7S9.webp [2m(before: 246kB, after: 87kB)[22m [2m(+1.92s)[22m [2m(15/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/m3.DGa_nZZV_2m7tTz.webp [2m(before: 240kB, after: 95kB)[22m [2m(+1.50s)[22m [2m(16/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/m6.BY42_Be2_2nlQc3.webp [2m(before: 238kB, after: 95kB)[22m [2m(+1.32s)[22m [2m(17/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/m2.B5kTqdCO_1tkXoW.webp [2m(before: 294kB, after: 100kB)[22m [2m(+1.32s)[22m [2m(18/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/d1.v_J1gD3P_tz0F7.webp [2m(before: 71kB, after: 70kB)[22m [2m(+572ms)[22m [2m(19/54)[22m
+[2m18:08:21[22m   [32m▶[39m /_astro/d3.CGCRs0-H_Z4ue21.webp [2m(before: 99kB, after: 87kB)[22m [2m(+539ms)[22m [2m(20/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d6.DetxM4Sl_wvX9N.webp [2m(before: 64kB, after: 62kB)[22m [2m(+1.01s)[22m [2m(21/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d2.B57ICuoV_1oCTE1.webp [2m(before: 95kB, after: 95kB)[22m [2m(+1.01s)[22m [2m(22/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d4.Brgr35k-_QbpD3.webp [2m(before: 73kB, after: 74kB)[22m [2m(+1.00s)[22m [2m(23/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/avatar.BcAu2wMi_yT6PR.webp [2m(before: 28kB, after: 20kB)[22m [2m(+701ms)[22m [2m(24/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d5.z7QGp_dj_1EwU7g.webp [2m(before: 50kB, after: 60kB)[22m [2m(+724ms)[22m [2m(25/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d1.v_J1gD3P_ZDw30v.webp [2m(before: 71kB, after: 124kB)[22m [2m(+993ms)[22m [2m(26/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d3.CGCRs0-H_Z11YS4k.webp [2m(before: 99kB, after: 150kB)[22m [2m(+993ms)[22m [2m(27/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/1.BQ4-k1kz_Z17x8Xz.webp [2m(before: 65kB, after: 123kB)[22m [2m(+980ms)[22m [2m(28/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/avatar.BcAu2wMi_Z2kMBUQ.webp [2m(before: 28kB, after: 68kB)[22m [2m(+320ms)[22m [2m(29/54)[22m
+[2m18:08:22[22m   [32m▶[39m /_astro/d6.DetxM4Sl_ZpXFRv.webp [2m(before: 64kB, after: 106kB)[22m [2m(+538ms)[22m [2m(30/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/d2.B57ICuoV_gwPXo.webp [2m(before: 95kB, after: 158kB)[22m [2m(+834ms)[22m [2m(31/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/avatar.BcAu2wMi_DTisN.webp [2m(before: 28kB, after: 3kB)[22m [2m(+298ms)[22m [2m(32/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/d4.Brgr35k-_ZgTD2z.webp [2m(before: 73kB, after: 126kB)[22m [2m(+835ms)[22m [2m(33/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/cover.bDPQizdp_1Rz3Bw.webp [2m(before: 75kB, after: 77kB)[22m [2m(+318ms)[22m [2m(34/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/firefly2.dxmXG905_2aJVld.webp [2m(before: 94kB, after: 38kB)[22m [2m(+357ms)[22m [2m(35/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/d5.z7QGp_dj_H2g4W.webp [2m(before: 50kB, after: 93kB)[22m [2m(+911ms)[22m [2m(36/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/firefly3.CGzFXcxi_ZJA0vM.webp [2m(before: 75kB, after: 38kB)[22m [2m(+633ms)[22m [2m(37/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/cover.bDPQizdp_C8GFs.webp [2m(before: 75kB, after: 29kB)[22m [2m(+318ms)[22m [2m(38/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/firefly2.dxmXG905_Z2o5m8L.webp [2m(before: 94kB, after: 15kB)[22m [2m(+281ms)[22m [2m(39/54)[22m
+[2m18:08:23[22m   [32m▶[39m /_astro/left-list.CdJfuugk_23fiFf.webp [2m(before: 80kB, after: 153kB)[22m [2m(+613ms)[22m [2m(40/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/right-grid2.BDLeNFG9_Z1Ypd95.webp [2m(before: 89kB, after: 164kB)[22m [2m(+1.05s)[22m [2m(41/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/left-grid3.DCIbm9j3_Z5Vd5j.webp [2m(before: 102kB, after: 180kB)[22m [2m(+1.04s)[22m [2m(42/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/both-list.CybtDZTU_xxVkb.webp [2m(before: 86kB, after: 164kB)[22m [2m(+1.04s)[22m [2m(43/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/both-grid.B-BFe9Al_1g1tLj.webp [2m(before: 101kB, after: 187kB)[22m [2m(+791ms)[22m [2m(44/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/masonry.BgzRsBcp_2mfpqn.webp [2m(before: 112kB, after: 194kB)[22m [2m(+757ms)[22m [2m(45/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/firefly1.CZCuCN4V_Z1LmOgS.webp [2m(before: 112kB, after: 56kB)[22m [2m(+1.23s)[22m [2m(46/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/firefly3.CGzFXcxi_Z1Lz6q8.webp [2m(before: 75kB, after: 172kB)[22m [2m(+1.25s)[22m [2m(47/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/github.urcbElKG_Z1bC9wS.webp [2m(before: 56kB, after: 81kB)[22m [2m(+513ms)[22m [2m(48/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/firefly2.dxmXG905_ZyJm5m.webp [2m(before: 94kB, after: 214kB)[22m [2m(+1.33s)[22m [2m(49/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/obsidian.Cwb2iYzd_1I7Wom.webp [2m(before: 35kB, after: 81kB)[22m [2m(+576ms)[22m [2m(50/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/vitepress.D2YnjBWE_Z1rUl1H.webp [2m(before: 33kB, after: 74kB)[22m [2m(+600ms)[22m [2m(51/54)[22m
+[2m18:08:24[22m   [32m▶[39m /_astro/docusaurus.Cu-On_k2_Zy4rHX.webp [2m(before: 43kB, after: 99kB)[22m [2m(+680ms)[22m [2m(52/54)[22m
+[2m18:08:25[22m   [32m▶[39m /_astro/firefly1.CZCuCN4V_1uGCKh.webp [2m(before: 112kB, after: 20kB)[22m [2m(+318ms)[22m [2m(53/54)[22m
+[2m18:08:25[22m   [32m▶[39m /_astro/firefly1.CZCuCN4V_1dgNYg.webp [2m(before: 112kB, after: 244kB)[22m [2m(+944ms)[22m [2m(54/54)[22m
+[2m18:08:25[22m [32m✓ Completed in 8.19s.
+[39m
+[2m18:08:26[22m [34m[build][39m [32m✓ Completed in 47.79s.[39m
+[2m18:08:26[22m [34m[@astrojs/sitemap][39m `sitemap-index.xml` created at `dist`
+[2m18:08:26[22m [34m[build][39m 34 page(s) built in [1m55.15s[22m
+[2m18:08:26[22m [34m[build][39m [1mComplete![22m

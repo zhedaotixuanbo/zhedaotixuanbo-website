@@ -1,0 +1,302 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<!-- Admin Auth Modal -->
+<div id="admin-auth-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+  <div class="card-base p-6 rounded-2xl w-80 max-w-[90vw] shadow-2xl">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-bold">管理员认证</h2>
+      <button id="admin-auth-close" class="btn-plain rounded-lg h-8 w-8 flex items-center justify-center active:scale-90">
+        <Icon is:inline name="material-symbols:close" class="text-[1.25rem]" />
+      </button>
+    </div>
+    <p class="text-sm text-neutral-400 mb-4">请输入管理员密码</p>
+    <input
+      id="admin-password-input"
+      type="password"
+      class="w-full rounded-lg border border-(--btn-regular-bg-hover) bg-(--card-bg) px-3 py-2 text-sm outline-none focus:border-(--primary) mb-3 transition"
+      placeholder="密码"
+      autocomplete="off"
+    />
+    <div id="admin-auth-error" class="text-red-500 text-sm mb-3 hidden">密码错误，请重试</div>
+    <button id="admin-auth-submit" class="w-full btn-regular rounded-lg h-10 font-bold active:scale-95 transition">
+      确认
+    </button>
+  </div>
+</div>
+
+<!-- Admin Exit Modal -->
+<div id="admin-exit-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+  <div class="card-base p-6 rounded-2xl w-80 max-w-[90vw] shadow-2xl">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-bold">退出管理员模式</h2>
+      <button id="admin-exit-close" class="btn-plain rounded-lg h-8 w-8 flex items-center justify-center active:scale-90">
+        <Icon is:inline name="material-symbols:close" class="text-[1.25rem]" />
+      </button>
+    </div>
+    <p class="text-sm text-neutral-400 mb-4">确定要退出管理员模式吗？退出后需要重新认证才能管理文章。</p>
+    <div class="flex gap-3">
+      <button id="admin-exit-cancel" class="flex-1 btn-plain rounded-lg h-10 font-bold active:scale-95 transition">
+        取消
+      </button>
+      <button id="admin-exit-confirm" class="flex-1 rounded-lg h-10 font-bold active:scale-95 transition" style="background: #ef4444; color: white;">
+        确认退出
+      </button>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+(function() {
+  var ADMIN_HASH = '84ceb2d775bae4aacd6392a813a0ee2234d0995b1dbe3ecd4cc2fb71b8e5ea0f';
+  var STORAGE_KEY = 'firefly_admin_authed';
+  var AUTH_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+  function hashPassword(password) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(password))
+      .then(function(hashBuffer) {
+        return Array.from(new Uint8Array(hashBuffer))
+          .map(function(b) { return b.toString(16).padStart(2, '0'); })
+          .join('');
+      });
+  }
+
+  function isAuthed() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (data && data.authed === true && Date.now() - data.time < AUTH_DURATION) {
+        return true;
+      }
+      localStorage.removeItem(STORAGE_KEY);
+      return false;
+    } catch(e) {
+      localStorage.removeItem(STORAGE_KEY);
+      return false;
+    }
+  }
+
+  function setAuthed() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ authed: true, time: Date.now() }));
+  }
+
+  function clearAuth() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function showModal() {
+    var modal = document.getElementById('admin-auth-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    var input = document.getElementById('admin-password-input');
+    if (input) { input.value = ''; input.focus(); }
+    var error = document.getElementById('admin-auth-error');
+    if (error) error.classList.add('hidden');
+  }
+
+  function hideModal() {
+    var modal = document.getElementById('admin-auth-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function showExitModal() {
+    var modal = document.getElementById('admin-exit-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function hideExitModal() {
+    var modal = document.getElementById('admin-exit-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function showNotification(message) {
+    var notif = document.createElement('div');
+    notif.className = 'fixed top-20 left-1/2 -translate-x-1/2 z-[9999] card-base px-4 py-2 rounded-lg text-sm font-medium shadow-lg';
+    notif.textContent = message;
+    notif.style.opacity = '0';
+    notif.style.transition = 'opacity 0.3s';
+    document.body.appendChild(notif);
+    requestAnimationFrame(function() { notif.style.opacity = '1'; });
+    setTimeout(function() {
+      notif.style.opacity = '0';
+      setTimeout(function() { notif.remove(); }, 300);
+    }, 2000);
+  }
+
+  function tryAuth() {
+    var input = document.getElementById('admin-password-input');
+    if (!input) return;
+    var password = input.value;
+    if (!password) return;
+
+    hashPassword(password).then(function(hash) {
+      if (hash === ADMIN_HASH) {
+        setAuthed();
+        hideModal();
+        injectAdminButtons();
+        showNotification('管理员认证成功');
+      } else {
+        var error = document.getElementById('admin-auth-error');
+        if (error) error.classList.remove('hidden');
+        input.value = '';
+        input.focus();
+      }
+    });
+  }
+
+  function exitAdmin() {
+    clearAuth();
+    removeAdminButtons();
+    hideExitModal();
+    showNotification('已退出管理员模式');
+  }
+
+  function injectAdminButtons() {
+    var existingNew = document.getElementById('admin-new-post-btn');
+    var existingManage = document.getElementById('admin-manage-btn');
+    if (existingNew && existingManage) return;
+
+    if (!isAuthed()) return;
+
+    var dropdowns = document.querySelectorAll('[data-dropdown]');
+    var articleDropdown = null;
+
+    for (var i = 0; i < dropdowns.length; i++) {
+      var items = dropdowns[i].querySelectorAll('.dropdown-item');
+      for (var j = 0; j < items.length; j++) {
+        if (items[j].textContent.indexOf('\u5f52\u6863') !== -1) {
+          articleDropdown = dropdowns[i];
+          break;
+        }
+      }
+      if (articleDropdown) break;
+    }
+
+    if (!articleDropdown) return;
+
+    var dropdownContent = articleDropdown.querySelector('.dropdown-content');
+    if (!dropdownContent) return;
+
+    if (!existingManage) {
+      var manageItem = document.createElement('a');
+      manageItem.id = 'admin-manage-btn';
+      manageItem.href = '/admin/manage/';
+      manageItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
+      manageItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span>';
+      manageItem.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
+      manageItem.style.paddingBottom = '0.5rem';
+      dropdownContent.insertBefore(manageItem, dropdownContent.firstChild);
+    }
+
+    if (!existingNew) {
+      var newPostItem = document.createElement('a');
+      newPostItem.id = 'admin-new-post-btn';
+      newPostItem.href = '/admin/new-post/';
+      newPostItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
+      newPostItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span>';
+      newPostItem.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
+      newPostItem.style.paddingBottom = '0.5rem';
+      dropdownContent.insertBefore(newPostItem, dropdownContent.firstChild);
+    }
+  }
+
+  function removeAdminButtons() {
+    var existingNew = document.getElementById('admin-new-post-btn');
+    if (existingNew) existingNew.remove();
+    var existingManage = document.getElementById('admin-manage-btn');
+    if (existingManage) existingManage.remove();
+  }
+
+  function initAdmin() {
+    var avatarLink = document.getElementById('admin-avatar-trigger');
+    if (avatarLink) {
+      var newLink = avatarLink.cloneNode(true);
+      avatarLink.parentNode.replaceChild(newLink, avatarLink);
+      newLink.addEventListener('dblclick', function(e) {
+        e.preventDefault();
+        if (isAuthed()) {
+          showExitModal();
+        } else {
+          showModal();
+        }
+      });
+    }
+
+    var closeBtn = document.getElementById('admin-auth-close');
+    if (closeBtn) closeBtn.onclick = hideModal;
+
+    var submitBtn = document.getElementById('admin-auth-submit');
+    if (submitBtn) submitBtn.onclick = tryAuth;
+
+    var passwordInput = document.getElementById('admin-password-input');
+    if (passwordInput) {
+      passwordInput.onkeydown = function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          tryAuth();
+        }
+      };
+    }
+
+    var modal = document.getElementById('admin-auth-modal');
+    if (modal) {
+      modal.onclick = function(e) {
+        if (e.target === modal) hideModal();
+      };
+    }
+
+    var exitCloseBtn = document.getElementById('admin-exit-close');
+    if (exitCloseBtn) exitCloseBtn.onclick = hideExitModal;
+
+    var exitCancelBtn = document.getElementById('admin-exit-cancel');
+    if (exitCancelBtn) exitCancelBtn.onclick = hideExitModal;
+
+    var exitConfirmBtn = document.getElementById('admin-exit-confirm');
+    if (exitConfirmBtn) exitConfirmBtn.onclick = exitAdmin;
+
+    var exitModal = document.getElementById('admin-exit-modal');
+    if (exitModal) {
+      exitModal.onclick = function(e) {
+        if (e.target === exitModal) hideExitModal();
+      };
+    }
+
+    injectAdminButtons();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAdmin);
+  } else {
+    initAdmin();
+  }
+
+  function setupSwupIntegration() {
+    if (window.swup && window.swup.hooks) {
+      window.swup.hooks.on('content:replace', function() {
+        removeAdminButtons();
+        initAdmin();
+      });
+    } else {
+      document.addEventListener('swup:enable', function() {
+        if (window.swup && window.swup.hooks) {
+          window.swup.hooks.on('content:replace', function() {
+            removeAdminButtons();
+            initAdmin();
+          });
+        }
+      });
+    }
+  }
+
+  setupSwupIntegration();
+})();
+</script>
