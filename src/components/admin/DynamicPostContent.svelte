@@ -77,55 +77,45 @@ onMount(async () => {
   try {
     const repo = await getRepoInfo();
     if (!repo) {
-      // 未配置云端，保留静态内容
       repoConfigured = false;
       loading = false;
       return;
     }
     repoConfigured = true;
 
+    // 只用 Trees API 检查文件是否存在
+    const fileList = await fetchPostFileList(repo);
+    if (fileList === null) {
+      // Trees API 调用失败（网络问题/速率限制），保留静态内容
+      loading = false;
+      return;
+    }
+
+    if (!postExistsInList(postId, fileList)) {
+      // Trees API 确认文件不存在
+      notFound = true;
+      loading = false;
+      hideStaticContent();
+      return;
+    }
+
+    // 文件存在，尝试加载最新内容
     loadPrism();
-
     const raw = await fetchPostRaw(repo, postId);
-    if (raw === null) {
-      // raw 获取失败，可能是文件不存在或网络问题
-      // 用 Trees API 二次验证：确认文件确实不存在才显示"已删除"
-      try {
-        const fileList = await fetchPostFileList(repo);
-        if (fileList && !postExistsInList(postId, fileList)) {
-          // Trees API 确认文件不存在
-          notFound = true;
-          loading = false;
-          hideStaticContent();
-          return;
-        }
-        // Trees API 也无法获取或文件存在 → 保留静态内容（可能是网络问题）
-        loading = false;
-        return;
-      } catch {
-        // Trees API 也失败 → 保留静态内容，不误判为已删除
-        loading = false;
-        return;
+    if (raw) {
+      const parsed = parsePostMarkdown(raw);
+      postTitle = parsed.frontmatter.title;
+      postBody = parsed.body;
+      if (parsed.frontmatter.title && parsed.frontmatter.title !== staticTitle) {
+        document.title = parsed.frontmatter.title;
       }
+      contentVisible = true;
+      hideStaticContent();
     }
-
-    const parsed = parsePostMarkdown(raw);
-    postTitle = parsed.frontmatter.title;
-    postBody = parsed.body;
-
-    // 如果内容有更新，替换页面标题
-    if (parsed.frontmatter.title && parsed.frontmatter.title !== staticTitle) {
-      document.title = parsed.frontmatter.title;
-    }
-
+    // raw 获取失败也没关系，静态内容还在
     loading = false;
-    contentVisible = true;
-    // 隐藏静态内容，显示动态内容
-    hideStaticContent();
-  } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
+  } catch {
     loading = false;
-    // 加载失败时保留静态内容作为 fallback
   }
 });
 
