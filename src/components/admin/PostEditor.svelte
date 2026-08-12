@@ -116,6 +116,7 @@ let licenseUrl = "https://creativecommons.org/licenses/by-nc-sa/4.0/";
 let sourceLink = "";
 let password = "";
 let passwordHint = "";
+let outdatedReminder = false;
 
 let content = "";
 let viewMode: "split" | "edit" | "preview" = "split";
@@ -237,7 +238,11 @@ async function loadPost(postId: string) {
         const idx = line.indexOf(":");
         if (idx === -1) continue;
         const key = line.substring(0, idx).trim();
-        const val = line.substring(idx + 1).trim();
+        let val = line.substring(idx + 1).trim();
+        // 去除 YAML 双引号包裹
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.slice(1, -1).replace(/\\"/g, '"');
+        }
 
         if (key === "title") title = val;
         else if (key === "published") published = val;
@@ -263,6 +268,7 @@ async function loadPost(postId: string) {
         else if (key === "sourceLink") sourceLink = val;
         else if (key === "password") password = val;
         else if (key === "passwordHint") passwordHint = val;
+        else if (key === "outdatedReminder") outdatedReminder = val === "true";
       }
     } else {
       // 无 frontmatter 的文件（如 spec 集合），整体作为内容加载
@@ -310,6 +316,14 @@ function generateFileName(): string {
   return `${safe || "untitled"}.md`;
 }
 
+function yamlValue(val: string): string {
+  // 如果值包含冒号、#、[] 等 YAML 特殊字符，用双引号包裹并转义内部双引号
+  if (/[:#{}\[\],&*!|>'"%@`]/.test(val) || val.startsWith(" ") || val.endsWith(" ")) {
+    return `"${val.replace(/"/g, '\\"')}"`;
+  }
+  return val;
+}
+
 function generateMarkdown(): string {
   // spec 集合文件：如果没有标题等元数据，不加 frontmatter
   if (collection === "spec" && !title && !description && !published) {
@@ -317,24 +331,25 @@ function generateMarkdown(): string {
   }
 
   const fm: string[] = ["---"];
-  fm.push(`title: ${title || "无标题"}`);
+  fm.push(`title: ${yamlValue(title || "无标题")}`);
   fm.push(`published: ${published}`);
   if (updated) fm.push(`updated: ${updated}`);
-  if (description) fm.push(`description: ${description}`);
+  if (description) fm.push(`description: ${yamlValue(description)}`);
   if (image) fm.push(`image: ${image}`);
   if (tags.length > 0) fm.push(`tags: [${tags.join(", ")}]`);
-  if (category) fm.push(`category: ${category}`);
+  if (category) fm.push(`category: ${yamlValue(category)}`);
   if (draft) fm.push("draft: true");
   if (pinned) fm.push("pinned: true");
   if (slug) fm.push(`slug: ${slug}`);
   if (lang) fm.push(`lang: ${lang}`);
-  if (author) fm.push(`author: ${author}`);
+  if (author) fm.push(`author: ${yamlValue(author)}`);
   if (!comment) fm.push("comment: false");
-  if (licenseName) fm.push(`licenseName: ${licenseName}`);
+  if (licenseName) fm.push(`licenseName: ${yamlValue(licenseName)}`);
   if (licenseUrl) fm.push(`licenseUrl: ${licenseUrl}`);
   if (sourceLink) fm.push(`sourceLink: ${sourceLink}`);
   if (password) fm.push(`password: ${password}`);
-  if (passwordHint) fm.push(`passwordHint: ${passwordHint}`);
+  if (passwordHint) fm.push(`passwordHint: ${yamlValue(passwordHint)}`);
+  if (outdatedReminder) fm.push("outdatedReminder: true");
   fm.push("---");
   fm.push("");
   fm.push(content);
@@ -1133,6 +1148,10 @@ afterUpdate(() => {
               <label class="flex items-center gap-2 cursor-pointer text-sm">
                 <input type="checkbox" bind:checked={comment} class="w-4 h-4 accent-(--primary)" />
                 <span>启用评论</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer text-sm">
+                <input type="checkbox" bind:checked={outdatedReminder} class="w-4 h-4 accent-(--primary)" />
+                <span>过时提醒</span>
               </label>
             </div>
           </div>

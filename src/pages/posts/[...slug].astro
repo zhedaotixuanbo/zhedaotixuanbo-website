@@ -497,7 +497,7 @@ const relatedPosts = await getRelatedPosts(entry, 5);
 
   <!-- 上次编辑时间 -->
   {
-    siteConfig.post.showLastModified && (() => {
+    siteConfig.post.showLastModified && entry.data.outdatedReminder && (() => {
       const lastModified = dayjs(entry.data.updated || entry.data.published);
       const dateStr = lastModified.format("YYYY-MM-DD");
       const outdatedThreshold = siteConfig.post.outdatedThreshold ?? 1;

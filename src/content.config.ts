@@ -21,6 +21,7 @@ type PostData = {
 	comment: boolean;
 	password: string;
 	passwordHint: string;
+	outdatedReminder: boolean;
 	prevTitle: string;
 	prevSlug: string;
 	nextTitle: string;
@@ -58,6 +59,7 @@ const postsCollection: ContentCollection<PostData> = defineCollection({
 		comment: z.boolean().optional().default(true),
 		password: z.string().optional().default(""),
 		passwordHint: z.string().optional().default(""),
+		outdatedReminder: z.boolean().optional().default(false),
 
 		/* For internal use */
 		prevTitle: z.string().default(""),
