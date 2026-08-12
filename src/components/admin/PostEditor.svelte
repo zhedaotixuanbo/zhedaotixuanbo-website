@@ -1,6 +1,13 @@
 <script lang="ts">
 import { onMount, afterUpdate } from "svelte";
 import katex from "katex";
+import {
+  getGithubConfig,
+  saveGithubConfig,
+  hasAdminPassword,
+  hasCloudConfig,
+  type GithubConfig,
+} from "@/utils/admin-github";
 
 let prismReady = false;
 
@@ -118,12 +125,14 @@ let githubToken = "";
 let repoOwner = "";
 let repoName = "";
 let branch = "main";
+let isSavingSettings = false;
+let needsReauth = false;
 
 let saveStatus = "";
 let saveStatusType: "info" | "success" | "error" = "info";
 let isSaving = false;
 
-onMount(() => {
+onMount(async () => {
   if (!isAdminAuthed()) {
     window.location.href = "/";
     return;
@@ -131,10 +140,18 @@ onMount(() => {
   authed = true;
   authChecked = true;
 
-  githubToken = localStorage.getItem("firefly_github_token") || "";
-  repoOwner = localStorage.getItem("firefly_github_owner") || "";
-  repoName = localStorage.getItem("firefly_github_repo") || "";
-  branch = localStorage.getItem("firefly_github_branch") || "main";
+  const cloudExists = await hasCloudConfig();
+  if (!hasAdminPassword() && cloudExists) {
+    needsReauth = true;
+  }
+
+  const config = await getGithubConfig();
+  if (config) {
+    githubToken = config.token;
+    repoOwner = config.owner;
+    repoName = config.repo;
+    branch = config.branch;
+  }
 
   if (window.innerWidth < 768) {
     viewMode = "edit";
@@ -172,20 +189,32 @@ async function loadPost(postId: string) {
   showStatus("正在加载文章内容...", "info");
 
   try {
-    const path = `src/content/posts/${postId}.md`;
-    const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}?ref=${branch}`;
-    const resp = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${githubToken}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
-
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
+    // 智能尝试多种路径变体
+    const basePath = `src/content/posts/${postId}`;
+    const pathVariants = [basePath];
+    if (!/\.(md|mdx|markdown)$/i.test(postId)) {
+      pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
     }
 
-    const data = await resp.json();
+    let data: any = null;
+    for (const p of pathVariants) {
+      const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${p}?ref=${branch}`;
+      const resp = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (resp.ok) {
+        data = await resp.json();
+        break;
+      }
+    }
+
+    if (!data) {
+      throw new Error(`无法找到文件: ${postId}`);
+    }
+
     const raw = base64ToUtf8(data.content);
 
     const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -307,12 +336,29 @@ function downloadMarkdown() {
   showStatus("文件已下载", "success");
 }
 
-function saveSettings() {
-  localStorage.setItem("firefly_github_token", githubToken);
-  localStorage.setItem("firefly_github_owner", repoOwner);
-  localStorage.setItem("firefly_github_repo", repoName);
-  localStorage.setItem("firefly_github_branch", branch);
-  showStatus("设置已保存", "success");
+async function saveSettings() {
+  isSavingSettings = true;
+  showStatus("正在保存...", "info");
+
+  const config: GithubConfig = {
+    token: githubToken,
+    owner: repoOwner,
+    repo: repoName,
+    branch,
+  };
+
+  const result = await saveGithubConfig(config);
+
+  if (result.cloud) {
+    showStatus("设置已同步到云端", "success");
+    needsReauth = false;
+  } else if (result.local) {
+    showStatus(`已保存到本地${result.error ? `（云端: ${result.error}）` : ""}`, "success");
+  } else {
+    showStatus(`保存失败: ${result.error || "未知错误"}`, "error");
+  }
+
+  isSavingSettings = false;
 }
 
 function utf8ToBase64(str: string): string {
@@ -418,7 +464,8 @@ function logout() {
 
 function renderMath(latex: string, displayMode: boolean): string {
   try {
-    return katex.renderToString(latex, {
+    const escaped = latex.replace(/(?<!\\)%/g, "\\%");
+    return katex.renderToString(escaped, {
       displayMode,
       throwOnError: false,
       errorColor: "#cc0000",
@@ -824,8 +871,15 @@ afterUpdate(() => {
     {#if showSettings}
       <div class="card-base p-4 rounded-xl mb-4">
         <h2 class="text-sm font-bold mb-3">GitHub 配置</h2>
+
+        {#if needsReauth}
+          <div class="mb-3 px-3 py-2 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 text-sm">
+            检测到云端配置，但需要重新输入管理员密码才能解密。请退出管理员模式后重新双击头像输入密码。
+          </div>
+        {/if}
+
         <p class="text-xs text-neutral-400 mb-3">
-          需要一个具有 repo 权限的 Personal Access Token。保存后，文章将直接提交到仓库，触发 Cloudflare Pages 自动构建。
+          需要一个具有 repo 权限的 Personal Access Token。保存后配置将加密同步到云端，所有设备共享。
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="sm:col-span-2">
@@ -867,9 +921,10 @@ afterUpdate(() => {
         </div>
         <button
           on:click={saveSettings}
-          class="mt-3 btn-regular rounded-lg h-9 px-4 text-sm font-bold active:scale-95 transition"
+          disabled={isSavingSettings}
+          class="mt-3 btn-regular rounded-lg h-9 px-4 text-sm font-bold active:scale-95 transition disabled:opacity-50"
         >
-          保存设置
+          {#if isSavingSettings}正在保存...{:else}保存设置{/if}
         </button>
       </div>
     {/if}

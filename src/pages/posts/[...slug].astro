@@ -18,6 +18,8 @@ import { Icon } from "astro-icon/components";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import CoverImage from "@/components/common/CoverImage.astro";
+import DynamicPostContent from "@/components/admin/DynamicPostContent.svelte";
+import PostAdminActions from "@/components/admin/PostAdminActions.svelte";
 import PostMetadata from "@/components/layout/PostMeta.astro";
 import RecommendedPost from "@/components/misc/RecommendedPost.astro";
 import SharePoster from "@/components/misc/SharePoster.svelte";
@@ -303,9 +305,13 @@ const relatedPosts = await getRelatedPosts(entry, 5);
 
       {entry.data.password ? (
         <EncryptedPost password={entry.data.password} slug={entry.id} hint={entry.data.passwordHint}>
+          <PostAdminActions client:load postId={entry.id} />
+          <DynamicPostContent client:load postId={entry.id} staticTitle={entry.data.title} staticContentSelector=".static-post-body-encrypted" />
+          <div class="static-post-body-encrypted">
           <Markdown class="mb-6 markdown-content onload-animation">
             <Content />
           </Markdown>
+          </div>
 
           {/* 打赏按钮 & 分享按钮 */}
           {
@@ -393,9 +399,13 @@ const relatedPosts = await getRelatedPosts(entry, 5);
         </EncryptedPost>
       ) : (
         <>
+          <PostAdminActions client:load postId={entry.id} />
+          <DynamicPostContent client:load postId={entry.id} staticTitle={entry.data.title} staticContentSelector=".static-post-body" />
+          <div class="static-post-body">
           <Markdown class="mb-6 markdown-content onload-animation">
             <Content />
           </Markdown>
+          </div>
 
           {/* 打赏按钮 & 分享按钮 */}
           {

@@ -1,5 +1,18 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import {
+	getGithubConfig,
+	saveGithubConfig,
+	hasAdminPassword,
+	hasCloudConfig,
+	type GithubConfig,
+} from "@/utils/admin-github";
+import {
+	getRepoInfo,
+	fetchPostFileList,
+	postExistsInList,
+	type RepoInfo,
+} from "@/utils/github-content";
 
 interface PostMeta {
 	id: string;
@@ -48,6 +61,9 @@ let repoOwner = "";
 let repoName = "";
 let branch = "main";
 let showSettings = false;
+let cloudConfigured = false;
+let needsReauth = false;
+let isSavingSettings = false;
 
 let statusMsg = "";
 let statusType: "info" | "success" | "error" = "info";
@@ -62,6 +78,9 @@ let editCategoryValue = "";
 
 let deleteConfirmId: string | null = null;
 
+let syncStatus: "idle" | "syncing" | "synced" | "failed" = "idle";
+let hiddenCount = 0;
+
 onMount(async () => {
 	if (!isAdminAuthed()) {
 		window.location.href = "/";
@@ -70,13 +89,29 @@ onMount(async () => {
 	authed = true;
 	authChecked = true;
 
-	githubToken = localStorage.getItem("firefly_github_token") || "";
-	repoOwner = localStorage.getItem("firefly_github_owner") || "";
-	repoName = localStorage.getItem("firefly_github_repo") || "";
-	branch = localStorage.getItem("firefly_github_branch") || "main";
-
+	await loadGithubConfig();
 	await fetchPosts();
 });
+
+async function loadGithubConfig() {
+	cloudConfigured = await hasCloudConfig();
+
+	if (!hasAdminPassword() && cloudConfigured) {
+		needsReauth = true;
+		return;
+	}
+
+	const config = await getGithubConfig();
+	if (config) {
+		githubToken = config.token;
+		repoOwner = config.owner;
+		repoName = config.repo;
+		branch = config.branch;
+		needsReauth = false;
+	} else if (cloudConfigured) {
+		needsReauth = true;
+	}
+}
 
 async function fetchPosts() {
 	loading = true;
@@ -86,6 +121,34 @@ async function fetchPosts() {
 		if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 		posts = await resp.json();
 		categories = [...new Set(posts.map((p) => p.category).filter(Boolean))].sort();
+
+		// 从 GitHub 实时同步，过滤已删除的文章
+		syncStatus = "syncing";
+		try {
+			let repo: RepoInfo | null = null;
+			if (repoOwner && repoName) {
+				repo = { owner: repoOwner, repo: repoName, branch };
+			} else {
+				repo = await getRepoInfo();
+			}
+
+			if (repo) {
+				const fileList = await fetchPostFileList(repo, githubToken || undefined);
+				if (fileList) {
+					const beforeCount = posts.length;
+					posts = posts.filter((p) => postExistsInList(p.id, fileList));
+					hiddenCount = beforeCount - posts.length;
+					categories = [...new Set(posts.map((p) => p.category).filter(Boolean))].sort();
+					syncStatus = "synced";
+				} else {
+					syncStatus = "failed";
+				}
+			} else {
+				syncStatus = "failed";
+			}
+		} catch {
+			syncStatus = "failed";
+		}
 	} catch (e) {
 		error = e instanceof Error ? e.message : String(e);
 	}
@@ -159,12 +222,30 @@ function showStatus(msg: string, type: "info" | "success" | "error") {
 	}
 }
 
-function saveSettings() {
-	localStorage.setItem("firefly_github_token", githubToken);
-	localStorage.setItem("firefly_github_owner", repoOwner);
-	localStorage.setItem("firefly_github_repo", repoName);
-	localStorage.setItem("firefly_github_branch", branch);
-	showStatus("设置已保存", "success");
+async function saveSettings() {
+	isSavingSettings = true;
+	showStatus("正在保存...", "info");
+
+	const config: GithubConfig = {
+		token: githubToken,
+		owner: repoOwner,
+		repo: repoName,
+		branch,
+	};
+
+	const result = await saveGithubConfig(config);
+
+	if (result.cloud) {
+		showStatus("设置已同步到云端", "success");
+		cloudConfigured = true;
+		needsReauth = false;
+	} else if (result.local) {
+		showStatus(`已保存到本地${result.error ? `（云端: ${result.error}）` : ""}`, "success");
+	} else {
+		showStatus(`保存失败: ${result.error || "未知错误"}`, "error");
+	}
+
+	isSavingSettings = false;
 }
 
 function checkGithubConfig(): boolean {
@@ -184,13 +265,34 @@ async function getGithubHeaders(): Promise<HeadersInit> {
 	};
 }
 
-async function getFileSha(path: string): Promise<string | null> {
+async function getFileSha(path: string): Promise<{ sha: string; path: string } | null> {
 	const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}?ref=${branch}`;
 	const resp = await fetch(url, { headers: await getGithubHeaders() });
 	if (resp.ok) {
 		const data = await resp.json();
-		return data.sha;
+		return { sha: data.sha, path };
 	}
+	return null;
+}
+
+/**
+ * 尝试多种路径变体获取文件 SHA
+ * post.id 可能包含或不包含扩展名，依次尝试
+ */
+async function getFileShaSmart(postId: string): Promise<{ sha: string; path: string } | null> {
+	// 1. 直接用 postId（已包含扩展名的情况）
+	let result = await getFileSha(`src/content/posts/${postId}`);
+	if (result) return result;
+
+	// 2. 尝试加 .md 扩展名
+	if (!/\.(md|mdx|markdown)$/i.test(postId)) {
+		result = await getFileSha(`src/content/posts/${postId}.md`);
+		if (result) return result;
+		// 3. 尝试加 .mdx 扩展名
+		result = await getFileSha(`src/content/posts/${postId}.mdx`);
+		if (result) return result;
+	}
+
 	return null;
 }
 
@@ -199,9 +301,31 @@ async function fetchFileContent(path: string): Promise<{ content: string; sha: s
 	const resp = await fetch(url, { headers: await getGithubHeaders() });
 	if (resp.ok) {
 		const data = await resp.json();
-		const content = atob(data.content.replace(/\n/g, ""));
+		const binary = atob(data.content.replace(/\n/g, ""));
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		const content = new TextDecoder().decode(bytes);
 		return { content, sha: data.sha };
 	}
+	return null;
+}
+
+/**
+ * 智能获取文件内容（尝试多种路径变体）
+ */
+async function fetchFileContentSmart(postId: string): Promise<{ content: string; sha: string; path: string } | null> {
+	// 1. 直接用 postId
+	let result = await fetchFileContent(`src/content/posts/${postId}`);
+	if (result) return { ...result, path: `src/content/posts/${postId}` };
+
+	// 2. 尝试加扩展名
+	if (!/\.(md|mdx|markdown)$/i.test(postId)) {
+		result = await fetchFileContent(`src/content/posts/${postId}.md`);
+		if (result) return { ...result, path: `src/content/posts/${postId}.md` };
+		result = await fetchFileContent(`src/content/posts/${postId}.mdx`);
+		if (result) return { ...result, path: `src/content/posts/${postId}.mdx` };
+	}
+
 	return null;
 }
 
@@ -317,15 +441,14 @@ async function changePostCategory(postId: string, newCategory: string) {
 	showStatus(`正在修改「${postId}」的分类...`, "info");
 
 	try {
-		const path = `src/content/posts/${postId}.md`;
-		const fileData = await fetchFileContent(path);
+		const fileData = await fetchFileContentSmart(postId);
 		if (!fileData) {
 			showStatus(`无法获取文件: ${postId}`, "error");
 			isProcessing = false;
 			return;
 		}
 
-		const raw = base64ToUtf8(fileData.content);
+		const raw = fileData.content;
 		const { fmRaw, body } = parseFrontmatter(raw);
 
 		let changes: Record<string, string | null>;
@@ -337,7 +460,7 @@ async function changePostCategory(postId: string, newCategory: string) {
 
 		const newMarkdown = rebuildMarkdown(fmRaw, body, changes);
 		const commitMsg = `修改分类: ${postId} -> ${newCategory || "无"}`;
-		const success = await updateFileContent(path, newMarkdown, fileData.sha, commitMsg);
+		const success = await updateFileContent(fileData.path, newMarkdown, fileData.sha, commitMsg);
 
 		if (success) {
 			const post = posts.find((p) => p.id === postId);
@@ -368,20 +491,19 @@ async function batchChangeCategory() {
 	for (let i = 0; i < ids.length; i++) {
 		showStatus(`正在批量修改分类 (${i + 1}/${ids.length})...`, "info");
 		try {
-			const path = `src/content/posts/${ids[i]}.md`;
-			const fileData = await fetchFileContent(path);
+			const fileData = await fetchFileContentSmart(ids[i]);
 			if (!fileData) {
 				failCount++;
 				continue;
 			}
-			const raw = base64ToUtf8(fileData.content);
+			const raw = fileData.content;
 			const { fmRaw, body } = parseFrontmatter(raw);
 			const changes: Record<string, string | null> = batchCategoryValue
 				? { category: batchCategoryValue }
 				: { category: null };
 			const newMarkdown = rebuildMarkdown(fmRaw, body, changes);
 			const commitMsg = `批量修改分类: ${ids[i]} -> ${batchCategoryValue || "无"}`;
-			const success = await updateFileContent(path, newMarkdown, fileData.sha, commitMsg);
+			const success = await updateFileContent(fileData.path, newMarkdown, fileData.sha, commitMsg);
 			if (success) {
 				successCount++;
 				const post = posts.find((p) => p.id === ids[i]);
@@ -407,15 +529,14 @@ async function deletePost(postId: string) {
 	showStatus(`正在删除「${postId}」...`, "info");
 
 	try {
-		const path = `src/content/posts/${postId}.md`;
-		const sha = await getFileSha(path);
-		if (!sha) {
-			showStatus(`无法找到文件: ${postId}`, "error");
+		const fileInfo = await getFileShaSmart(postId);
+		if (!fileInfo) {
+			showStatus(`无法找到文件: ${postId}（请检查仓库中是否存在此文件）`, "error");
 			isProcessing = false;
 			return;
 		}
 		const commitMsg = `删除文章: ${postId}`;
-		const success = await deleteFile(path, sha, commitMsg);
+		const success = await deleteFile(fileInfo.path, fileInfo.sha, commitMsg);
 		if (success) {
 			posts = posts.filter((p) => p.id !== postId);
 			categories = [...new Set(posts.map((p) => p.category).filter(Boolean))].sort();
@@ -445,14 +566,13 @@ async function batchDelete() {
 	for (let i = 0; i < ids.length; i++) {
 		showStatus(`正在批量删除 (${i + 1}/${ids.length})...`, "info");
 		try {
-			const path = `src/content/posts/${ids[i]}.md`;
-			const sha = await getFileSha(path);
-			if (!sha) {
+			const fileInfo = await getFileShaSmart(ids[i]);
+			if (!fileInfo) {
 				failCount++;
 				continue;
 			}
 			const commitMsg = `批量删除文章: ${ids[i]}`;
-			const success = await deleteFile(path, sha, commitMsg);
+			const success = await deleteFile(fileInfo.path, fileInfo.sha, commitMsg);
 			if (success) {
 				successCount++;
 			} else {
@@ -537,6 +657,26 @@ $: selectedCount = selectedIds.size;
 		{#if showSettings}
 			<div class="card-base p-4 rounded-xl mb-4">
 				<h2 class="text-sm font-bold mb-3">GitHub 配置</h2>
+
+				{#if needsReauth}
+					<div class="mb-3 px-3 py-2 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 text-sm">
+						检测到云端配置，但需要重新输入管理员密码才能解密。请退出管理员模式后重新双击头像输入密码。
+					</div>
+				{/if}
+
+				<div class="mb-3 flex items-center gap-2 text-xs">
+					{#if cloudConfigured}
+						<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 font-medium">
+							云端配置已同步
+						</span>
+					{:else}
+						<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-500/15 text-neutral-500 font-medium">
+							未配置云端同步
+						</span>
+					{/if}
+					<span class="text-neutral-400">保存后配置将加密同步到云端，所有设备共享</span>
+				</div>
+
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 					<div class="sm:col-span-2">
 						<label class="block text-xs font-medium mb-1 text-neutral-400">GitHub Token</label>
@@ -577,9 +717,10 @@ $: selectedCount = selectedIds.size;
 				</div>
 				<button
 					on:click={saveSettings}
-					class="mt-3 btn-regular rounded-lg h-9 px-4 text-sm font-bold active:scale-95 transition"
+					disabled={isSavingSettings}
+					class="mt-3 btn-regular rounded-lg h-9 px-4 text-sm font-bold active:scale-95 transition disabled:opacity-50"
 				>
-					保存设置
+					{#if isSavingSettings}正在保存...{:else}保存设置{/if}
 				</button>
 			</div>
 		{/if}
@@ -625,6 +766,18 @@ $: selectedCount = selectedIds.size;
 				>
 					刷新
 				</button>
+				{#if syncStatus === "syncing"}
+					<span class="text-xs text-neutral-400 flex items-center gap-1">
+						<span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+						正在从 GitHub 同步...
+					</span>
+				{:else if syncStatus === "synced" && hiddenCount > 0}
+					<span class="text-xs text-amber-500">已隐藏 {hiddenCount} 篇已删除文章</span>
+				{:else if syncStatus === "synced"}
+					<span class="text-xs text-green-500">已与 GitHub 同步</span>
+				{:else if syncStatus === "failed"}
+					<span class="text-xs text-neutral-400">同步失败，显示静态列表</span>
+				{/if}
 			</div>
 
 			<!-- Batch Actions -->
@@ -810,22 +963,119 @@ $: selectedCount = selectedIds.size;
 	</div>
 {/if}
 
+<style>
+.del-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	width: 100vw;
+	height: 100vh;
+	z-index: 2147483647;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.55);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	padding: 1rem;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+.del-modal-card {
+	background: var(--card-bg, #fff);
+	border-radius: 1rem;
+	padding: 1.5rem;
+	width: 100%;
+	max-width: 24rem;
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+	animation: del-modal-in 0.2s ease-out;
+}
+@keyframes del-modal-in {
+	from { transform: scale(0.95); opacity: 0; }
+	to { transform: scale(1); opacity: 1; }
+}
+.del-modal-title {
+	font-size: 1.125rem;
+	font-weight: 700;
+	margin-bottom: 1rem;
+	color: #ef4444;
+}
+.del-modal-desc {
+	font-size: 0.875rem;
+	color: var(--meta-color, #888);
+	margin-bottom: 1rem;
+	line-height: 1.5;
+}
+.del-modal-actions {
+	display: flex;
+	gap: 0.5rem;
+}
+.del-modal-btn {
+	flex: 1;
+	height: 2.5rem;
+	border-radius: 0.5rem;
+	font-weight: 700;
+	font-size: 0.875rem;
+	cursor: pointer;
+	transition: transform 0.1s;
+	border: none;
+}
+.del-modal-btn:active {
+	transform: scale(0.95);
+}
+.del-modal-btn-danger {
+	background: #ef4444;
+	color: #fff;
+}
+.del-modal-btn-danger:hover {
+	background: #dc2626;
+}
+.del-modal-btn-cancel {
+	background: var(--btn-regular-bg-hover, rgba(128,128,128,0.15));
+	color: var(--deep-text, inherit);
+}
+.del-modal-input {
+	width: 100%;
+	border-radius: 0.5rem;
+	border: 1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.3));
+	background: var(--card-bg, #fff);
+	padding: 0.5rem 0.75rem;
+	font-size: 0.875rem;
+	outline: none;
+	margin-bottom: 1rem;
+	transition: border-color 0.15s;
+	color: var(--deep-text, inherit);
+	box-sizing: border-box;
+}
+.del-modal-input:focus {
+	border-color: var(--primary, #3b82f6);
+}
+:global(html.dark) .del-modal-card {
+	background: var(--card-bg, #1a1a2e);
+}
+:global(html.dark) .del-modal-desc {
+	color: rgba(255,255,255,0.5);
+}
+</style>
+
 <!-- Batch Category Modal -->
 {#if showBatchCategoryModal}
-	<div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" on:click|self={() => (showBatchCategoryModal = false)}>
-		<div class="card-base p-6 rounded-2xl w-80 max-w-[90vw] shadow-2xl">
-			<h2 class="text-lg font-bold mb-4">批量修改分类</h2>
-			<p class="text-sm text-neutral-400 mb-3">将选中的 {selectedCount} 篇文章的分类修改为：</p>
+	<div class="del-modal-overlay" on:click|self={() => (showBatchCategoryModal = false)}>
+		<div class="del-modal-card">
+			<h2 class="del-modal-title" style="color: var(--primary, #3b82f6);">批量修改分类</h2>
+			<p class="del-modal-desc">将选中的 {selectedCount} 篇文章的分类修改为：</p>
 			<input
 				type="text"
 				bind:value={batchCategoryValue}
 				placeholder="输入新分类名（留空则移除分类）"
-				class="w-full rounded-lg border border-(--btn-regular-bg-hover) bg-(--card-bg) px-3 py-2 text-sm outline-none focus:border-(--primary) mb-4 transition"
+				class="del-modal-input"
 				on:keydown={(e) => { if (e.key === 'Enter') batchChangeCategory(); }}
 			/>
-			<div class="flex gap-2">
-				<button on:click={batchChangeCategory} class="flex-1 btn-regular rounded-lg h-10 font-bold active:scale-95 transition">确认</button>
-				<button on:click={() => (showBatchCategoryModal = false)} class="flex-1 btn-plain rounded-lg h-10 font-bold active:scale-95 transition">取消</button>
+			<div class="del-modal-actions">
+				<button on:click={batchChangeCategory} class="del-modal-btn del-modal-btn-danger" style="background: var(--primary, #3b82f6);">确认</button>
+				<button on:click={() => (showBatchCategoryModal = false)} class="del-modal-btn del-modal-btn-cancel">取消</button>
 			</div>
 		</div>
 	</div>
@@ -833,13 +1083,13 @@ $: selectedCount = selectedIds.size;
 
 <!-- Batch Delete Confirm -->
 {#if showBatchDeleteConfirm}
-	<div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" on:click|self={() => (showBatchDeleteConfirm = false)}>
-		<div class="card-base p-6 rounded-2xl w-80 max-w-[90vw] shadow-2xl">
-			<h2 class="text-lg font-bold mb-4 text-red-500">确认批量删除</h2>
-			<p class="text-sm text-neutral-400 mb-4">确定要删除选中的 {selectedCount} 篇文章吗？此操作不可撤销，将通过 GitHub API 提交删除。</p>
-			<div class="flex gap-2">
-				<button on:click={batchDelete} class="flex-1 rounded-lg h-10 font-bold active:scale-95 transition bg-red-500 text-white">确认删除</button>
-				<button on:click={() => (showBatchDeleteConfirm = false)} class="flex-1 btn-plain rounded-lg h-10 font-bold active:scale-95 transition">取消</button>
+	<div class="del-modal-overlay" on:click|self={() => (showBatchDeleteConfirm = false)}>
+		<div class="del-modal-card">
+			<h2 class="del-modal-title">确认批量删除</h2>
+			<p class="del-modal-desc">确定要删除选中的 {selectedCount} 篇文章吗？此操作不可撤销，将通过 GitHub API 提交删除。</p>
+			<div class="del-modal-actions">
+				<button on:click={batchDelete} class="del-modal-btn del-modal-btn-danger">确认删除</button>
+				<button on:click={() => (showBatchDeleteConfirm = false)} class="del-modal-btn del-modal-btn-cancel">取消</button>
 			</div>
 		</div>
 	</div>
@@ -847,15 +1097,15 @@ $: selectedCount = selectedIds.size;
 
 <!-- Single Delete Confirm -->
 {#if deleteConfirmId}
-	<div class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" on:click|self={() => (deleteConfirmId = null)}>
-		<div class="card-base p-6 rounded-2xl w-80 max-w-[90vw] shadow-2xl">
-			<h2 class="text-lg font-bold mb-4 text-red-500">确认删除</h2>
-			<p class="text-sm text-neutral-400 mb-4">
+	<div class="del-modal-overlay" on:click|self={() => (deleteConfirmId = null)}>
+		<div class="del-modal-card">
+			<h2 class="del-modal-title">确认删除</h2>
+			<p class="del-modal-desc">
 				确定要删除「{posts.find((p) => p.id === deleteConfirmId)?.title || deleteConfirmId}」吗？此操作不可撤销。
 			</p>
-			<div class="flex gap-2">
-				<button on:click={() => { deletePost(deleteConfirmId); deleteConfirmId = null; }} class="flex-1 rounded-lg h-10 font-bold active:scale-95 transition bg-red-500 text-white">确认删除</button>
-				<button on:click={() => (deleteConfirmId = null)} class="flex-1 btn-plain rounded-lg h-10 font-bold active:scale-95 transition">取消</button>
+			<div class="del-modal-actions">
+				<button on:click={() => { deletePost(deleteConfirmId); deleteConfirmId = null; }} class="del-modal-btn del-modal-btn-danger">确认删除</button>
+				<button on:click={() => (deleteConfirmId = null)} class="del-modal-btn del-modal-btn-cancel">取消</button>
 			</div>
 		</div>
 	</div>

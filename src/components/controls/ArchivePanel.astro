@@ -2,6 +2,7 @@
 import { siteConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
+import DynamicPostList from "@/components/admin/DynamicPostList.svelte";
 import { getSortedPostsList } from "@/utils/content-utils";
 import { getPostUrlBySlug, url } from "@/utils/url-utils";
 
@@ -56,6 +57,12 @@ const foldOnFilter = collapseAllButFirst;
   class="card-base px-8 py-6"
   data-fold={foldOnFilter ? "true" : "false"}
 >
+  <DynamicPostList
+    client:load
+    postIds={posts.map((p) => p.id)}
+    cardSelector=".archive-post"
+    containerSelector="archive-panel"
+  />
   {/* 筛选头部：默认隐藏，客户端在有筛选时填充并显示 */}
   <div id="archive-filter-header" class="mb-5 hidden">
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">

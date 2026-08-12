@@ -35,15 +35,16 @@
 | **构建输出目录** | `dist` |
 | **根目录** | `/` （默认） |
 
-### 环境变量
+### 环境变量（必填）
 
-在 Cloudflare Pages 的 **设置** → **环境变量** 中添加：
+在 Cloudflare Pages 的 **设置** → **环境变量** 中添加以下两个变量：
 
 | 变量名 | 值 | 说明 |
 |---|---|---|
 | `NODE_VERSION` | `22` | Node.js 版本 |
+| `PNPM_VERSION` | `9.14.4` | pnpm 版本（必须与 `package.json` 中 `packageManager` 字段一致） |
 
-> pnpm 会自动通过 `package.json` 中的 `packageManager` 字段识别，无需额外设置。
+> **重要**：Cloudflare Pages v3 构建系统不再从 `pnpm-lock.yaml` 或 `package.json` 的 `packageManager` 字段自动识别 pnpm 版本。如果不设置 `PNPM_VERSION`，将使用默认的 pnpm 10.x，导致依赖安装失败或构建出错，Cloudflare 会继续显示上一次成功构建的旧版本。
 
 ---
 
@@ -219,7 +220,21 @@
 ### Q: 构建失败怎么办？
 检查 Cloudflare Pages 的构建日志。常见原因：
 - Node.js 版本过低 → 确保设置了 `NODE_VERSION=22`
+- pnpm 版本不匹配 → 确保设置了 `PNPM_VERSION=9.14.4`（与 `package.json` 中 `packageManager` 一致）
 - 依赖安装失败 → 确保仓库包含 `pnpm-lock.yaml`
+
+### Q: 部署后网站还是显示旧版本？
+这通常是因为构建失败但 Cloudflare 继续服务上一次成功的构建。按以下步骤排查：
+1. 进入 Cloudflare Dashboard → Workers & Pages → 选择你的项目
+2. 点击 **Deployments** → 查看最近的构建记录
+3. 如果最新构建状态为 **Failed**，点击查看构建日志
+4. 最常见原因：未设置 `PNPM_VERSION` 环境变量，导致 pnpm 版本不匹配
+5. 在 **Settings** → **Environment variables** 中添加 `PNPM_VERSION=9.14.4`
+6. 添加后需要手动触发一次新构建：在 Deployments 页面点击 **Retry deployment**
+7. 等待构建完成后刷新网站
+
+### Q: 如何确认代码已推送到 GitHub？
+在 GitHub 仓库页面查看最近一次提交时间，确认与本地最新修改一致。如果本地安装了 Git，可以运行 `git log --oneline -1` 查看最新提交。
 
 ### Q: 保存文章时报 "Bad credentials"？
 GitHub Token 已过期或权限不足。重新生成 Token 并确保勾选了 `repo` 权限。

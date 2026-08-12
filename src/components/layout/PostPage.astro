@@ -1,6 +1,7 @@
 ---
 import type { CollectionEntry } from "astro:content";
 import { getPostUrlBySlug } from "@utils/url-utils";
+import DynamicPostList from "@/components/admin/DynamicPostList.svelte";
 import PostCard from "@/components/layout/PostCard.astro";
 import { siteConfig } from "@/config";
 
@@ -29,6 +30,12 @@ const coverPositionClass =
 	siteConfig.postListLayout.coverPosition === "left" ? " cover-left" : "";
 ---
 
+<DynamicPostList
+  client:load
+  postIds={page.data.map((entry: PostEntry) => entry.id)}
+  cardSelector=".post-card-item"
+  containerSelector="#post-list-container"
+/>
 <div
   id="post-list-container"
   class={`transition-all duration-500 ease-in-out mb-4 ${initialLayoutClass}${coverPositionClass}`}

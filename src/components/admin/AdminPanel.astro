@@ -141,6 +141,7 @@ import { Icon } from "astro-icon/components";
     hashPassword(password).then(function(hash) {
       if (hash === ADMIN_HASH) {
         setAuthed();
+        sessionStorage.setItem('firefly_admin_password', password);
         hideModal();
         injectAdminButtons();
         showNotification('管理员认证成功');
@@ -155,6 +156,7 @@ import { Icon } from "astro-icon/components";
 
   function exitAdmin() {
     clearAuth();
+    sessionStorage.removeItem('firefly_admin_password');
     removeAdminButtons();
     hideExitModal();
     showNotification('已退出管理员模式');

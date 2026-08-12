@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount, afterUpdate } from "svelte";
 import katex from "katex";
+import { getGithubConfig } from "@/utils/admin-github";
 
 let prismReady = false;
 
@@ -91,14 +92,42 @@ let statusMsg = "";
 let statusType: "info" | "success" | "error" = "info";
 let currentContent = "";
 
-onMount(() => {
+onMount(async () => {
   currentContent = initialContent;
   authed = isAdminAuthed();
+
+  // Always try to fetch the latest announcement from GitHub
+  // so the content stays in sync even before a rebuild completes
+  try {
+    const cloudResp = await fetch("/admin-config.json?t=" + Date.now());
+    if (cloudResp.ok) {
+      const cloud = await cloudResp.json();
+      if (cloud.owner && cloud.repo) {
+        const b = cloud.branch || "main";
+        const rawUrl = `https://raw.githubusercontent.com/${cloud.owner}/${cloud.repo}/${b}/src/config/announcementConfig.ts?t=${Date.now()}`;
+        const rawResp = await fetch(rawUrl);
+        if (rawResp.ok) {
+          const tsContent = await rawResp.text();
+          // Parse the content field, handling escaped characters
+          const match = tsContent.match(/content:\s*"((?:[^"\\]|\\.)*)"/);
+          if (match) {
+            currentContent = JSON.parse('"' + match[1] + '"');
+          }
+        }
+      }
+    }
+  } catch {
+    // Fall back to build-time initialContent
+  }
+
   if (authed) {
-    githubToken = localStorage.getItem("firefly_github_token") || "";
-    repoOwner = localStorage.getItem("firefly_github_owner") || "";
-    repoName = localStorage.getItem("firefly_github_repo") || "";
-    branch = localStorage.getItem("firefly_github_branch") || "main";
+    const config = await getGithubConfig();
+    if (config) {
+      githubToken = config.token;
+      repoOwner = config.owner;
+      repoName = config.repo;
+      branch = config.branch;
+    }
     loadPrism();
   }
 });
@@ -213,7 +242,8 @@ async function saveAnnouncement() {
 
 function renderMath(latex: string, displayMode: boolean): string {
   try {
-    return katex.renderToString(latex, { displayMode, throwOnError: false, errorColor: "#cc0000", strict: false, trust: true });
+    const escaped = latex.replace(/(?<!\\)%/g, "\\%");
+    return katex.renderToString(escaped, { displayMode, throwOnError: false, errorColor: "#cc0000", strict: false, trust: true });
   } catch { return `<span style="color:#cc0000;">${latex}</span>`; }
 }
 
