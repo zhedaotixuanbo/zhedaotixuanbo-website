@@ -153,6 +153,9 @@ onMount(async () => {
     repoOwner = config.owner;
     repoName = config.repo;
     branch = config.branch;
+    console.log("[PostEditor] GitHub 配置已加载");
+  } else {
+    console.warn("[PostEditor] 未找到 GitHub 配置");
   }
 
   if (window.innerWidth < 768) {
@@ -168,6 +171,7 @@ onMount(async () => {
     collection = collectionParam;
   }
   if (editParam) {
+    console.log("[PostEditor] 编辑模式，postId:", editParam, "collection:", collection);
     editMode = true;
     editId = editParam;
     fileName = editParam;
@@ -185,7 +189,11 @@ function base64ToUtf8(b64: string): string {
 }
 
 async function loadPost(postId: string) {
+  console.log("[PostEditor] loadPost 开始, postId:", postId);
+  console.log("[PostEditor] GitHub 配置:", { hasToken: !!githubToken, hasOwner: !!repoOwner, hasRepo: !!repoName });
+
   if (!githubToken || !repoOwner || !repoName) {
+    console.warn("[PostEditor] GitHub 配置不完整，无法加载文章");
     showStatus("请先在设置中填写 GitHub 信息以加载文章", "error");
     showSettings = true;
     return;
@@ -301,6 +309,8 @@ async function loadPost(postId: string) {
       throw new Error(`无法找到文件: ${postId}（在 ${collectionPath} 目录下未找到匹配文件）`);
     }
 
+    console.log("[PostEditor] 找到文件:", data.path, "大小:", data.size);
+
     // 从 API 返回的路径中提取正确的文件名（保留原始扩展名）
     if (data.path) {
       const pathParts = data.path.split("/");
@@ -356,9 +366,12 @@ async function loadPost(postId: string) {
     }
 
     saveStatus = "";
+    console.log("[PostEditor] 文章加载成功, title:", title, "content length:", content.length);
     showStatus(`已加载文章: ${title}`, "success");
   } catch (e) {
-    showStatus(`加载失败: ${e instanceof Error ? e.message : String(e)}`, "error");
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[PostEditor] 加载文章失败:", e);
+    showStatus(`加载失败: ${msg}`, "error");
   }
 
   isLoadingPost = false;
@@ -564,11 +577,12 @@ async function saveToGithub() {
 function showStatus(msg: string, type: "info" | "success" | "error") {
   saveStatus = msg;
   saveStatusType = type;
-  if (type !== "info") {
+  if (type === "success") {
     setTimeout(() => {
       saveStatus = "";
     }, 5000);
   }
+  // error 类型不自动消失，需要用户手动关闭或进行其他操作
 }
 
 function logout() {
@@ -632,6 +646,33 @@ afterUpdate(() => {
         </button>
       </div>
     </div>
+
+    <!-- Status Banner (prominent, at top) -->
+    {#if saveStatus}
+      <div
+        class="mb-3 px-4 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-between gap-3 {saveStatusType === 'success'
+          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+          : saveStatusType === 'error'
+            ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+            : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'}"
+      >
+        <div class="flex items-center gap-2">
+          {#if saveStatusType === 'info'}
+            <span class="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
+          {/if}
+          <span>{saveStatus}</span>
+        </div>
+        {#if saveStatusType !== 'info'}
+          <button
+            on:click={() => (saveStatus = '')}
+            class="text-current opacity-60 hover:opacity-100 transition flex-shrink-0"
+            aria-label="关闭提示"
+          >
+            ✕
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Settings Panel -->
     {#if showSettings}
@@ -908,7 +949,15 @@ afterUpdate(() => {
     </div>
 
     <!-- Editor / Preview -->
-    <div class="flex gap-4 mb-4" style="height: calc(100vh - 28rem); min-height: 300px;">
+    <div class="flex gap-4 mb-4 relative" style="height: calc(100vh - 28rem); min-height: 300px;">
+      {#if isLoadingPost}
+        <div class="absolute inset-0 z-10 flex items-center justify-center bg-(--card-bg)/80 backdrop-blur-sm rounded-xl">
+          <div class="flex flex-col items-center gap-3">
+            <span class="inline-block w-8 h-8 border-2 border-(--primary) border-t-transparent rounded-full animate-spin"></span>
+            <span class="text-sm text-neutral-400">正在加载文章内容...</span>
+          </div>
+        </div>
+      {/if}
       <!-- Editor -->
       <div
         class="card-base rounded-xl overflow-hidden flex-1 {viewMode === 'preview' ? 'hidden md:flex' : 'flex'} flex-col"
@@ -940,19 +989,6 @@ afterUpdate(() => {
         </div>
       </div>
     </div>
-
-    <!-- Status -->
-    {#if saveStatus}
-      <div
-        class="mb-3 px-4 py-2 rounded-lg text-sm font-medium transition {saveStatusType === 'success'
-          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-          : saveStatusType === 'error'
-            ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-            : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'}"
-      >
-        {saveStatus}
-      </div>
-    {/if}
 
     <!-- Actions -->
     <div class="flex flex-wrap gap-3 mb-8">
