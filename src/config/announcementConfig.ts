@@ -5,7 +5,7 @@ export const announcementConfig: AnnouncementConfig = {
 	title: "公告",
 
 	// 公告内容
-	content: "欢迎来到我的博客！这是一则示例公告。",
+	content: "『重启能解决 99% 的问题』\n『什么？你说修 bug 吗，那重启也修不完』",
 
 	// 是否允许用户关闭公告
 	closable: false,
