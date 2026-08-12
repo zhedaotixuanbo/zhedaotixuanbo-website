@@ -224,15 +224,22 @@ async function loadPost(postId: string) {
         // postId 可能包含子目录路径（如 subdir/my-post）
         const postIdBasename = postIdNoExt.split("/").pop() || postIdNoExt;
 
+        // 归一化函数：去除所有标点符号、空格、特殊字符，转小写
+        // 用于匹配 Astro 生成的 id（会去除 ：[]- 等字符并转小写）
+        const normalize = (s: string): string =>
+          s.toLowerCase().replace(/[\s\-_：:.\[\]()（）【】{}<>《》"'#!?*,;|/\\]+/g, "");
+
+        const postIdNorm = normalize(postIdBasename);
+
         // 多级匹配策略
-        // 1) 完整路径直接匹配
+        // 1) 完整路径直接匹配（大小写敏感）
         for (const f of files) {
           if (f === `${prefix}${postIdNoExt}.md` || f === `${prefix}${postIdNoExt}.mdx`) {
             actualPath = f;
             break;
           }
         }
-        // 2) 仅文件名匹配（不含目录）
+        // 2) 仅文件名匹配（大小写敏感，不含目录）
         if (!actualPath) {
           for (const f of files) {
             const fileBasename = f.split("/").pop() || "";
@@ -251,12 +258,15 @@ async function loadPost(postId: string) {
             }
           }
         }
-        // 4) slug 模糊匹配：postId 是 slug，文件名中包含它
-        if (!actualPath) {
+        // 4) 归一化匹配：去除标点和大小写差异后比较
+        //    解决 Astro id 与实际文件名不一致的问题
+        //    例如：题解：P15524-[ROIR...].md → 题解p15524roir...
+        if (!actualPath && postIdNorm) {
           for (const f of files) {
             const fileBasename = f.split("/").pop() || "";
             const fileNoExt = fileBasename.replace(/\.(md|mdx)$/i, "");
-            if (fileNoExt === postIdBasename || fileNoExt === postId) {
+            const fileNorm = normalize(fileNoExt);
+            if (fileNorm === postIdNorm) {
               actualPath = f;
               break;
             }
