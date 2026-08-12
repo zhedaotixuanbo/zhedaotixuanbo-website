@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount, afterUpdate } from "svelte";
-import katex from "katex";
+import { renderMarkdown } from "@/utils/preview-renderer";
 import {
   getGithubConfig,
   saveGithubConfig,
@@ -576,354 +576,7 @@ function logout() {
   window.location.href = "/";
 }
 
-function renderMath(latex: string, displayMode: boolean): string {
-  try {
-    const escaped = latex.replace(/(?<!\\)%/g, "\\%");
-    return katex.renderToString(escaped, {
-      displayMode,
-      throwOnError: false,
-      errorColor: "#cc0000",
-      strict: false,
-      trust: true,
-    });
-  } catch {
-    return `<span style="color:#cc0000;">${latex}</span>`;
-  }
-}
-
-function parseTableCells(line: string): string[] {
-  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
-  return trimmed.split("|").map((c) => c.trim());
-}
-
-function parseAlignment(separator: string): string[] {
-  return parseTableCells(separator).map((cell) => {
-    const left = cell.startsWith(":");
-    const right = cell.endsWith(":");
-    if (left && right) return "center";
-    if (right) return "right";
-    return "left";
-  });
-}
-
-function renderTable(tableText: string, tableStyle?: string): string {
-  const lines = tableText.trim().split("\n").filter((l) => l.trim());
-  if (lines.length < 2) return tableText;
-
-  const headerCells = parseTableCells(lines[0]);
-  const alignments = parseAlignment(lines[1]);
-  const dataRows: string[][] = [];
-  for (let i = 2; i < lines.length; i++) {
-    dataRows.push(parseTableCells(lines[i]));
-  }
-
-  // Process cell merging: ^ = vertical merge, < = horizontal merge
-  const merges: { row: number; col: number; rowspan: number; colspan: number }[] = [];
-  const merged: Set<string> = new Set();
-
-  for (let r = 0; r < dataRows.length; r++) {
-    for (let c = 0; c < dataRows[r].length; c++) {
-      const cell = dataRows[r][c].trim();
-      if (cell === "^") {
-        merged.add(`${r},${c}`);
-        for (let pr = r - 1; pr >= 0; pr--) {
-          if (!merged.has(`${pr},${c}`)) {
-            const existing = merges.find((m) => m.row === pr && m.col === c);
-            if (existing) existing.rowspan++;
-            else merges.push({ row: pr, col: c, rowspan: 2, colspan: 1 });
-            break;
-          }
-        }
-      } else if (cell === "<") {
-        merged.add(`${r},${c}`);
-        for (let pc = c - 1; pc >= 0; pc--) {
-          if (!merged.has(`${r},${pc}`)) {
-            const existing = merges.find((m) => m.row === r && m.col === pc);
-            if (existing) existing.colspan++;
-            else merges.push({ row: r, col: pc, rowspan: 1, colspan: 2 });
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  const styleClass = tableStyle === "tuack" ? "preview-table-tuack" : tableStyle === "three" ? "preview-table-three" : "";
-  let html = `<table class="preview-table ${styleClass}">`;
-
-  html += "<thead><tr>";
-  for (let c = 0; c < headerCells.length; c++) {
-    const align = alignments[c] || "left";
-    html += `<th style="text-align:${align};">${processInlineFormatting(headerCells[c])}</th>`;
-  }
-  html += "</tr></thead><tbody>";
-
-  for (let r = 0; r < dataRows.length; r++) {
-    html += "<tr>";
-    for (let c = 0; c < dataRows[r].length; c++) {
-      if (merged.has(`${r},${c}`)) continue;
-      const cell = dataRows[r][c].trim();
-      const align = alignments[c] || "left";
-      const merge = merges.find((m) => m.row === r && m.col === c);
-      const attrs = merge ? ` rowspan="${merge.rowspan}" colspan="${merge.colspan}"` : "";
-      html += `<td${attrs} style="text-align:${align};">${processInlineFormatting(cell)}</td>`;
-    }
-    html += "</tr>";
-  }
-  html += "</tbody></table>";
-  return html;
-}
-
-function processInlineFormatting(text: string): string {
-  // Bold
-  text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  text = text.replace(/__(.+?)__/g, "<strong>$1</strong>");
-  // Italic
-  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
-  text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, "<em>$1</em>");
-  // Strikethrough
-  text = text.replace(/~~(.+?)~~/g, "<del>$1</del>");
-  // Inline code
-  text = text.replace(/`([^`]+)`/g, '<code class="preview-inline-code">$1</code>');
-  // Images and links
-  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="preview-img" />');
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="preview-link">$1</a>');
-  // Auto links
-  text = text.replace(/&lt;(https?:\/\/[^&]+)&gt;/g, '<a href="$1" class="preview-link">$1</a>');
-  // Spoilers
-  text = text.replace(/:spoiler\[([^\]]+)\]/g, '<span class="preview-spoiler">$1</span>');
-  // Escape sequences
-  text = text.replace(/\\([\\`*_{}\[\]()#+\-.!])/g, "$1");
-  return text;
-}
-
-function renderPreview(md: string): string {
-  if (!md) return "";
-
-  const store: string[] = [];
-  const stash = (html: string): string => {
-    const i = store.length;
-    store.push(html);
-    return `\x00STORE${i}\x00`;
-  };
-
-  let text = md;
-  // Escape HTML
-  text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  // Protect escaped dollar signs
-  text = text.replace(/\\\$/g, () => stash("$"));
-
-  // 1. Extract code blocks with optional line-numbers and lines parameters
-  text = text.replace(/```([^\n]*)\n([\s\S]*?)```/g, (_m, info: string, code: string) => {
-    const parts = (info || "").trim().split(/\s+/).filter(Boolean);
-    const lang = parts[0] || "plaintext";
-    const showLineNumbers = parts.includes("line-numbers");
-    const linesParam = parts.find((p) => p.startsWith("lines="));
-
-    const codeContent = code.replace(/\n$/, "");
-    const lineNumClass = showLineNumbers ? " line-numbers" : "";
-    const lineHlAttr = linesParam ? ` data-line="${linesParam.replace("lines=", "")}"` : "";
-    const langBadge = lang && lang !== "plaintext" ? lang.toUpperCase() : "TEXT";
-
-    return stash(
-      `<div class="preview-code-wrapper">` +
-        `<div class="preview-code-toolbar">` +
-        `<span class="preview-code-lang-badge">${langBadge}</span>` +
-        `<button class="preview-copy-btn" type="button">复制</button>` +
-        `</div>` +
-        `<pre class="preview-codeblock${lineNumClass}"${lineHlAttr}>` +
-        `<code class="language-${lang}">${codeContent}</code>` +
-        `</pre>` +
-        `</div>`,
-    );
-  });
-
-  // 2. Extract display math ($$...$$) and render with KaTeX
-  text = text.replace(/\$\$([\s\S]*?)\$\$/g, (_m, math: string) =>
-    stash(`<div class="preview-math-display">${renderMath(math.trim(), true)}</div>`),
-  );
-
-  // 3. Extract inline math ($...$) and render with KaTeX
-  text = text.replace(/(?<!\$)\$(?!\$)([^\$\n]+?)(?<!\$)\$(?!\$)/g, (_m, math: string) =>
-    stash(renderMath(math, false)),
-  );
-
-  // 4. Process callouts (from 3 colons up to 10, innermost first for nesting)
-  const calloutStyles: Record<string, { color: string; icon: string; bg: string }> = {
-    info: { color: "#3b82f6", icon: "ℹ", bg: "rgba(59,130,246,0.1)" },
-    success: { color: "#22c55e", icon: "✓", bg: "rgba(34,197,94,0.1)" },
-    warning: { color: "#f59e0b", icon: "⚠", bg: "rgba(245,158,11,0.1)" },
-    error: { color: "#ef4444", icon: "✗", bg: "rgba(239,68,68,0.1)" },
-  };
-  for (let n = 3; n <= 10; n++) {
-    const cs = ":".repeat(n);
-    const re = new RegExp(
-      `^${cs}(info|success|warning|error)(?:\\[([^\\]]*)\\])?(?:\\{open\\})?\\s*$\\n([\\s\\S]*?)\\n${cs}\\s*$`,
-      "gm",
-    );
-    text = text.replace(re, (_m, type: string, title: string, content: string) => {
-      const s = calloutStyles[type] || calloutStyles.info;
-      const titleHtml = title
-        ? `<div class="preview-callout-title" style="color:${s.color};"><span class="preview-callout-icon">${s.icon}</span> ${title}</div>`
-        : "";
-      return stash(
-        `<div class="preview-callout" style="border-left:4px solid ${s.color};background:${s.bg};">${titleHtml}<div class="preview-callout-body">${processInlineFormatting(content.trim())}</div></div>`,
-      );
-    });
-  }
-
-  // 5. Process alignment containers
-  for (let n = 3; n <= 10; n++) {
-    const cs = ":".repeat(n);
-    const re = new RegExp(
-      `^${cs}align\\{(center|right|left)\\}\\s*$\\n([\\s\\S]*?)\\n${cs}\\s*$`,
-      "gm",
-    );
-    text = text.replace(re, (_m, align: string, content: string) =>
-      stash(`<div style="text-align:${align};">${processInlineFormatting(content.trim())}</div>`),
-    );
-  }
-
-  // 6. Process epigraphs
-  for (let n = 3; n <= 10; n++) {
-    const cs = ":".repeat(n);
-    const re = new RegExp(
-      `^${cs}epigraph(?:\\[([^\\]]*)\\])?\\s*$\\n([\\s\\S]*?)\\n${cs}\\s*$`,
-      "gm",
-    );
-    text = text.replace(re, (_m, title: string, content: string) => {
-      const titleHtml = title ? `<div class="preview-epigraph-author">— ${title}</div>` : "";
-      return stash(
-        `<div class="preview-epigraph"><blockquote class="preview-epigraph-quote">${processInlineFormatting(content.trim())}</blockquote>${titleHtml}</div>`,
-      );
-    });
-  }
-
-  // 7. Process cute-table wrappers + tables (with cell merging)
-  text = text.replace(
-    /(?:^::cute-table\{(tuack|three)(?:=\d+)?\}\s*\n)?(^\|.+\|\n\|[-:\s|]+\|\n(?:\|.*\|\n?)+)/gm,
-    (_m, style: string | undefined, table: string) =>
-      stash(renderTable(table, style)),
-  );
-
-  // 8. Process GitHub card directives
-  text = text.replace(/::github\{repo="([^"]+)"\}/g, (_m, repo: string) =>
-    stash(`<div class="preview-github-card">📦 GitHub: ${repo}</div>`),
-  );
-
-  // 9. Process headings (h6 to h1, order matters)
-  text = text.replace(/^###### (.+)$/gm, '<h6 class="preview-h6">$1</h6>');
-  text = text.replace(/^##### (.+)$/gm, '<h5 class="preview-h5">$1</h5>');
-  text = text.replace(/^#### (.+)$/gm, '<h4 class="preview-h4">$1</h4>');
-  text = text.replace(/^### (.+)$/gm, '<h3 class="preview-h3">$1</h3>');
-  text = text.replace(/^## (.+)$/gm, '<h2 class="preview-h2">$1</h2>');
-  text = text.replace(/^# (.+)$/gm, '<h1 class="preview-h1">$1</h1>');
-
-  // 10. Process bold, italic, strikethrough (both * and _)
-  text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  text = text.replace(/__(.+?)__/g, "<strong>$1</strong>");
-  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
-  text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, "<em>$1</em>");
-  text = text.replace(/~~(.+?)~~/g, "<del>$1</del>");
-
-  // 11. Process inline code
-  text = text.replace(/`([^`]+)`/g, '<code class="preview-inline-code">$1</code>');
-
-  // 12. Process images and links
-  text = text.replace(
-    /!\[([^\]]*)\]\(([^)]+)\)/g,
-    '<img src="$2" alt="$1" class="preview-img" />',
-  );
-  text = text.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" class="preview-link">$1</a>',
-  );
-
-  // 13. Process auto links <https://...>
-  text = text.replace(
-    /&lt;(https?:\/\/[^&]+)&gt;/g,
-    '<a href="$1" class="preview-link">$1</a>',
-  );
-
-  // 14. Process blockquotes (with GFM callout syntax support)
-  text = text.replace(
-    /^&gt; \[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gm,
-    (_m, type: string, body: string) => {
-      const colors: Record<string, string> = {
-        NOTE: "#3b82f6",
-        TIP: "#22c55e",
-        IMPORTANT: "#8b5cf6",
-        WARNING: "#f59e0b",
-        CAUTION: "#ef4444",
-      };
-      const color = colors[type] || colors.NOTE;
-      return stash(
-        `<div class="preview-callout" style="border-left:4px solid ${color};background:${color}1a;"><div class="preview-callout-title" style="color:${color};">${type}</div><div class="preview-callout-body">${body}</div></div>`,
-      );
-    },
-  );
-  text = text.replace(
-    /^&gt; (.+)$/gm,
-    '<blockquote class="preview-blockquote">$1</blockquote>',
-  );
-
-  // 15. Process task lists
-  text = text.replace(
-    /^- \[([ x])\] (.+)$/gm,
-    (_m, checked: string, content: string) =>
-      `<li class="preview-task"><input type="checkbox" ${checked === "x" ? "checked" : ""} disabled /> ${content}</li>`,
-  );
-
-  // 16. Process lists (unordered and ordered)
-  text = text.replace(/^[-*+] (.+)$/gm, "<li>$1</li>");
-  text = text.replace(/^\d+\. (.+)$/gm, "<li class=\"preview-ordered-item\">$1</li>");
-
-  // 17. Process horizontal rules
-  text = text.replace(/^(-{3,}|\*{3,}|_{3,})\s*$/gm, '<hr class="preview-hr" />');
-
-  // 18. Process spoilers
-  text = text.replace(
-    /:spoiler\[([^\]]+)\]/g,
-    '<span class="preview-spoiler">$1</span>',
-  );
-
-  // 19. Process escape sequences
-  text = text.replace(/\\([\\`*_{}\[\]()#+\-.!])/g, "$1");
-
-  // 20. Wrap list items in ul/ol
-  text = text.replace(/((?:<li[^>]*>.*?<\/li>\n?)+)/g, (match) => {
-    if (match.includes("preview-task")) {
-      return `<ul class="preview-list preview-task-list">${match}</ul>`;
-    }
-    if (match.includes("preview-ordered-item")) {
-      return `<ol class="preview-list">${match}</ol>`;
-    }
-    return `<ul class="preview-list">${match}</ul>`;
-  });
-
-  // 21. Wrap remaining text in paragraphs
-  const blocks = text.split(/\n\n+/);
-  text = blocks
-    .map((block) => {
-      block = block.trim();
-      if (!block) return "";
-      if (block.match(/^<(h[1-6]|pre|blockquote|div|hr|ul|ol|table)/)) return block;
-      if (block.match(/^\x00STORE/)) return block;
-      if (block.match(/^<li/)) return block;
-      return `<p class="preview-p">${block.replace(/\n/g, "<br>")}</p>`;
-    })
-    .join("\n");
-
-  // 22. Restore all stored items (reverse order so nested placeholders resolve correctly)
-  for (let i = store.length - 1; i >= 0; i--) {
-    text = text.replace(`\x00STORE${i}\x00`, store[i]);
-  }
-
-  return text;
-}
-
-$: previewHtml = renderPreview(content);
+$: previewHtml = renderMarkdown(content);
 $: canSave = !!title && !isSaving;
 
 afterUpdate(() => {
@@ -932,7 +585,6 @@ afterUpdate(() => {
 </script>
 
 <svelte:head>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-highlight/prism-line-highlight.min.css" crossorigin="anonymous" />
@@ -1805,5 +1457,34 @@ afterUpdate(() => {
 /* KaTeX adjustments for dark mode */
 .prose :global(.katex) {
   font-size: 1.05em;
+}
+
+/* KaTeX error display */
+.prose :global(.katex-error) {
+  color: #cc0000;
+  font-family: var(--font-code, ui-monospace, monospace);
+  font-size: 0.85em;
+}
+
+/* Mermaid/PlantUML placeholder */
+.prose :global(.preview-mermaid-placeholder) {
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--btn-regular-bg-hover, rgba(128, 128, 128, 0.4));
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--deep-text, inherit);
+  opacity: 0.8;
+}
+
+.prose :global(.preview-mermaid-code) {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--btn-regular-bg-hover, rgba(128, 128, 128, 0.15));
+  border-radius: 0.25rem;
+  font-family: var(--font-code, ui-monospace, monospace);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
 }
 </style>
