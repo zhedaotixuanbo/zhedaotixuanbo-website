@@ -2,6 +2,7 @@
 import { getEntry, render } from "astro:content";
 import Comment from "@components/comment/index.astro";
 import Markdown from "@components/common/Markdown.astro";
+import PostAdminActions from "@components/admin/PostAdminActions.svelte";
 import { Icon } from "astro-icon/components";
 import { commentConfig, siteConfig } from "@/config";
 import I18nKey from "@/i18n/i18nKey";
@@ -51,6 +52,7 @@ const description = i18n(I18nKey.guestbookDescription);
         )}
       </div>
       
+      <PostAdminActions postId="guestbook" collection="spec" showDelete={false} client:only="svelte" />
       <Markdown class="mt-2">
         <Content />
       </Markdown>

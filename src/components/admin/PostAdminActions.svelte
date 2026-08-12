@@ -3,6 +3,8 @@ import { onMount } from "svelte";
 import { getGithubConfig } from "@/utils/admin-github";
 
 export let postId: string;
+export let collection = "posts";
+export let showDelete = true;
 
 let authed = false;
 let showDeleteConfirm = false;
@@ -30,7 +32,12 @@ onMount(() => {
 });
 
 function editPost() {
-  window.location.href = `/admin/new-post/?edit=${encodeURIComponent(postId)}`;
+  const params = new URLSearchParams();
+  params.set("edit", postId);
+  if (collection !== "posts") {
+    params.set("collection", collection);
+  }
+  window.location.href = `/admin/new-post/?${params.toString()}`;
 }
 
 async function deletePost() {
@@ -46,7 +53,7 @@ async function deletePost() {
     }
 
     // 智能尝试多种路径变体
-    const basePath = `src/content/posts/${postId}`;
+    const basePath = `src/content/${collection}/${postId}`;
     const pathVariants = [basePath];
     if (!/\.(md|mdx|markdown)$/i.test(postId)) {
       pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
@@ -121,12 +128,14 @@ async function deletePost() {
     >
       编辑
     </button>
-    <button
-      on:click={() => (showDeleteConfirm = true)}
-      class="text-sm font-medium px-3 py-1.5 rounded-lg transition text-red-500 hover:bg-red-500/10 active:scale-95"
-    >
-      删除
-    </button>
+    {#if showDelete}
+      <button
+        on:click={() => (showDeleteConfirm = true)}
+        class="text-sm font-medium px-3 py-1.5 rounded-lg transition text-red-500 hover:bg-red-500/10 active:scale-95"
+      >
+        删除
+      </button>
+    {/if}
   </div>
 
   {#if showDeleteConfirm}
@@ -182,9 +191,9 @@ async function deletePost() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   padding: 1rem;
   box-sizing: border-box;
   overflow: hidden;

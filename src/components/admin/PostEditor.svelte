@@ -93,6 +93,7 @@ let authChecked = false;
 
 let editMode = false;
 let editId = "";
+let collection = "posts";
 let isLoadingPost = false;
 
 let title = "";
@@ -161,6 +162,10 @@ onMount(async () => {
 
   const params = new URLSearchParams(window.location.search);
   const editParam = params.get("edit");
+  const collectionParam = params.get("collection");
+  if (collectionParam) {
+    collection = collectionParam;
+  }
   if (editParam) {
     editMode = true;
     editId = editParam;
@@ -190,7 +195,7 @@ async function loadPost(postId: string) {
 
   try {
     // 智能尝试多种路径变体
-    const basePath = `src/content/posts/${postId}`;
+    const basePath = `src/content/${collection}/${postId}`;
     const pathVariants = [basePath];
     if (!/\.(md|mdx|markdown)$/i.test(postId)) {
       pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
@@ -213,6 +218,12 @@ async function loadPost(postId: string) {
 
     if (!data) {
       throw new Error(`无法找到文件: ${postId}`);
+    }
+
+    // 从 API 返回的路径中提取正确的文件名（保留原始扩展名）
+    if (data.path) {
+      const pathParts = data.path.split("/");
+      fileName = pathParts[pathParts.length - 1];
     }
 
     const raw = base64ToUtf8(data.content);
@@ -253,6 +264,9 @@ async function loadPost(postId: string) {
         else if (key === "password") password = val;
         else if (key === "passwordHint") passwordHint = val;
       }
+    } else {
+      // 无 frontmatter 的文件（如 spec 集合），整体作为内容加载
+      content = raw;
     }
 
     saveStatus = "";
@@ -287,7 +301,7 @@ function handleTagKeydown(e: KeyboardEvent) {
 
 function generateFileName(): string {
   if (fileName) {
-    return fileName.endsWith(".md") ? fileName : `${fileName}.md`;
+    return fileName.match(/\.(md|mdx)$/i) ? fileName : `${fileName}.md`;
   }
   const safe = title
     .replace(/[<>:"/\\|?*]/g, "")
@@ -297,6 +311,11 @@ function generateFileName(): string {
 }
 
 function generateMarkdown(): string {
+  // spec 集合文件：如果没有标题等元数据，不加 frontmatter
+  if (collection === "spec" && !title && !description && !published) {
+    return content;
+  }
+
   const fm: string[] = ["---"];
   fm.push(`title: ${title || "无标题"}`);
   fm.push(`published: ${published}`);
@@ -387,7 +406,7 @@ async function saveToGithub() {
 
   try {
     const filename = generateFileName();
-    const path = `src/content/posts/${filename}`;
+    const path = `src/content/${collection}/${filename}`;
     const md = generateMarkdown();
     const encoded = utf8ToBase64(md);
 

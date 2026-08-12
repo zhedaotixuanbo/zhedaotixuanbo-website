@@ -48,20 +48,54 @@ export async function getRepoInfo(): Promise<RepoInfo | null> {
 /**
  * 从 GitHub raw 获取文章 Markdown 原文
  * 返回 null 表示文件不存在（文章已删除）
+ * 智能尝试多种路径变体（带/不带 .md/.mdx 扩展名）
+ * 同时尝试 raw.githubusercontent.com 和 GitHub API 两个源
  */
 export async function fetchPostRaw(
 	repo: RepoInfo,
 	postId: string,
 ): Promise<string | null> {
-	try {
-		const url = `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/src/content/posts/${postId}?t=${Date.now()}`;
-		const resp = await fetch(url);
-		if (resp.status === 404 || resp.status === 403) return null;
-		if (!resp.ok) return null;
-		return await resp.text();
-	} catch {
-		return null;
+	// 智能尝试多种路径变体
+	const basePath = `src/content/posts/${postId}`;
+	const pathVariants = [basePath];
+	if (!/\.(md|mdx|markdown)$/i.test(postId)) {
+		pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
 	}
+
+	// 第一轮：尝试 raw.githubusercontent.com
+	for (const p of pathVariants) {
+		const url = `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${p}?t=${Date.now()}`;
+		try {
+			const resp = await fetch(url);
+			if (resp.ok) return await resp.text();
+		} catch {
+			// 网络错误，继续尝试
+		}
+	}
+
+	// 第二轮：尝试 GitHub Contents API（带 base64 解码）
+	const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
+	for (const p of pathVariants) {
+		const url = `https://api.github.com/repos/${repo.owner}/${repo.repo}/contents/${p}?ref=${repo.branch}`;
+		try {
+			const resp = await fetch(url, { headers });
+			if (resp.ok) {
+				const data = await resp.json();
+				if (data.content) {
+					const binary = atob(data.content.replace(/\n/g, ""));
+					const bytes = new Uint8Array(binary.length);
+					for (let i = 0; i < binary.length; i++) {
+						bytes[i] = binary.charCodeAt(i);
+					}
+					return new TextDecoder().decode(bytes);
+				}
+			}
+		} catch {
+			// 网络错误，继续尝试
+		}
+	}
+
+	return null;
 }
 
 export interface PostFrontmatter {

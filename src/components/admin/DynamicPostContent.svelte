@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount, afterUpdate } from "svelte";
 import katex from "katex";
-import { getRepoInfo, fetchPostRaw, parsePostMarkdown } from "@/utils/github-content";
+import { getRepoInfo, fetchPostRaw, parsePostMarkdown, fetchPostFileList, postExistsInList } from "@/utils/github-content";
 
 export let postId: string;
 export let staticTitle: string;
@@ -88,10 +88,25 @@ onMount(async () => {
 
     const raw = await fetchPostRaw(repo, postId);
     if (raw === null) {
-      notFound = true;
-      loading = false;
-      hideStaticContent();
-      return;
+      // raw 获取失败，可能是文件不存在或网络问题
+      // 用 Trees API 二次验证：确认文件确实不存在才显示"已删除"
+      try {
+        const fileList = await fetchPostFileList(repo);
+        if (fileList && !postExistsInList(postId, fileList)) {
+          // Trees API 确认文件不存在
+          notFound = true;
+          loading = false;
+          hideStaticContent();
+          return;
+        }
+        // Trees API 也无法获取或文件存在 → 保留静态内容（可能是网络问题）
+        loading = false;
+        return;
+      } catch {
+        // Trees API 也失败 → 保留静态内容，不误判为已删除
+        loading = false;
+        return;
+      }
     }
 
     const parsed = parsePostMarkdown(raw);
