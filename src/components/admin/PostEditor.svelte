@@ -195,22 +195,92 @@ async function loadPost(postId: string) {
   showStatus("正在加载文章内容...", "info");
 
   try {
-    // 智能尝试多种路径变体
-    const basePath = `src/content/${collection}/${postId}`;
-    const pathVariants = [basePath];
-    if (!/\.(md|mdx|markdown)$/i.test(postId)) {
-      pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
+    const collectionPath = `src/content/${collection}`;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${githubToken}`,
+      Accept: "application/vnd.github+json",
+    };
+
+    // 1. 用 Trees API 获取目录下所有文件，找到匹配的实际路径
+    const treeUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/git/trees/${branch}?recursive=1`;
+    const treeResp = await fetch(treeUrl, { headers });
+    let actualPath: string | null = null;
+
+    if (treeResp.ok) {
+      const treeData = await treeResp.json();
+      if (treeData.tree) {
+        const prefix = `${collectionPath}/`;
+        // 收集该 collection 下所有 md/mdx 文件的相对路径
+        const files: string[] = [];
+        for (const item of treeData.tree) {
+          if (item.type !== "blob") continue;
+          if (!item.path.startsWith(prefix)) continue;
+          if (!/\.(md|mdx)$/i.test(item.path)) continue;
+          files.push(item.path);
+        }
+
+        // 去除 postId 中的扩展名（如果有）
+        const postIdNoExt = postId.replace(/\.(md|mdx|markdown)$/i, "");
+        // postId 可能包含子目录路径（如 subdir/my-post）
+        const postIdBasename = postIdNoExt.split("/").pop() || postIdNoExt;
+
+        // 多级匹配策略
+        // 1) 完整路径直接匹配
+        for (const f of files) {
+          if (f === `${prefix}${postIdNoExt}.md` || f === `${prefix}${postIdNoExt}.mdx`) {
+            actualPath = f;
+            break;
+          }
+        }
+        // 2) 仅文件名匹配（不含目录）
+        if (!actualPath) {
+          for (const f of files) {
+            const fileBasename = f.split("/").pop() || "";
+            if (fileBasename === `${postIdBasename}.md` || fileBasename === `${postIdBasename}.mdx`) {
+              actualPath = f;
+              break;
+            }
+          }
+        }
+        // 3) postId 本身就是完整相对路径（含扩展名）
+        if (!actualPath) {
+          for (const f of files) {
+            if (f === `${prefix}${postId}`) {
+              actualPath = f;
+              break;
+            }
+          }
+        }
+        // 4) slug 模糊匹配：postId 是 slug，文件名中包含它
+        if (!actualPath) {
+          for (const f of files) {
+            const fileBasename = f.split("/").pop() || "";
+            const fileNoExt = fileBasename.replace(/\.(md|mdx)$/i, "");
+            if (fileNoExt === postIdBasename || fileNoExt === postId) {
+              actualPath = f;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. 如果 Trees API 找到了实际路径，直接用；否则回退到旧逻辑
+    const pathVariants: string[] = [];
+    if (actualPath) {
+      pathVariants.push(actualPath);
+    } else {
+      const basePath = `${collectionPath}/${postId}`;
+      pathVariants.push(basePath);
+      if (!/\.(md|mdx|markdown)$/i.test(postId)) {
+        pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
+      }
     }
 
     let data: any = null;
     for (const p of pathVariants) {
       const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${p}?ref=${branch}`;
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${githubToken}`,
-          Accept: "application/vnd.github+json",
-        },
-      });
+      const resp = await fetch(url, { headers });
       if (resp.ok) {
         data = await resp.json();
         break;
@@ -218,7 +288,7 @@ async function loadPost(postId: string) {
     }
 
     if (!data) {
-      throw new Error(`无法找到文件: ${postId}`);
+      throw new Error(`无法找到文件: ${postId}（在 ${collectionPath} 目录下未找到匹配文件）`);
     }
 
     // 从 API 返回的路径中提取正确的文件名（保留原始扩展名）
