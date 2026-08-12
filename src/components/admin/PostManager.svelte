@@ -121,34 +121,6 @@ async function fetchPosts() {
 		if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 		posts = await resp.json();
 		categories = [...new Set(posts.map((p) => p.category).filter(Boolean))].sort();
-
-		// 从 GitHub 实时同步，过滤已删除的文章
-		syncStatus = "syncing";
-		try {
-			let repo: RepoInfo | null = null;
-			if (repoOwner && repoName) {
-				repo = { owner: repoOwner, repo: repoName, branch };
-			} else {
-				repo = await getRepoInfo();
-			}
-
-			if (repo) {
-				const fileList = await fetchPostFileList(repo, githubToken || undefined);
-				if (fileList) {
-					const beforeCount = posts.length;
-					posts = posts.filter((p) => postExistsInList(p.id, fileList));
-					hiddenCount = beforeCount - posts.length;
-					categories = [...new Set(posts.map((p) => p.category).filter(Boolean))].sort();
-					syncStatus = "synced";
-				} else {
-					syncStatus = "failed";
-				}
-			} else {
-				syncStatus = "failed";
-			}
-		} catch {
-			syncStatus = "failed";
-		}
 	} catch (e) {
 		error = e instanceof Error ? e.message : String(e);
 	}
@@ -765,19 +737,7 @@ $: selectedCount = selectedIds.size;
 					class="btn-plain scale-animation rounded-lg h-9 px-3 text-sm font-medium active:scale-95"
 				>
 					刷新
-				</button>
-				{#if syncStatus === "syncing"}
-					<span class="text-xs text-neutral-400 flex items-center gap-1">
-						<span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-						正在从 GitHub 同步...
-					</span>
-				{:else if syncStatus === "synced" && hiddenCount > 0}
-					<span class="text-xs text-amber-500">已隐藏 {hiddenCount} 篇已删除文章</span>
-				{:else if syncStatus === "synced"}
-					<span class="text-xs text-green-500">已与 GitHub 同步</span>
-				{:else if syncStatus === "failed"}
-					<span class="text-xs text-neutral-400">同步失败，显示静态列表</span>
-				{/if}
+			</button>
 			</div>
 
 			<!-- Batch Actions -->
