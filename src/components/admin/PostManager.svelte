@@ -81,7 +81,9 @@ let showBatchDeleteConfirm = false;
 let editingCategoryFor: string | null = null;
 let editCategoryValue = "";
 
-let deleteConfirmId: string | null = null;
+let showDeleteConfirm = false;
+let deleteTargetId: string | null = null;
+let deleteTargetTitle = "";
 
 let syncStatus: "idle" | "syncing" | "synced" | "failed" = "idle";
 let hiddenCount = 0;
@@ -853,12 +855,7 @@ $: selectedCount = selectedIds.size;
 									<div class="flex items-center gap-1">
 										<button on:click={() => editPost(post.id)} class="btn-plain rounded h-7 px-2 flex items-center justify-center text-xs font-medium active:scale-90 transition">编辑</button>
 										<button on:click={() => viewPost(post.id)} class="btn-plain rounded h-7 px-2 flex items-center justify-center text-xs font-medium active:scale-90 transition">查看</button>
-										{#if deleteConfirmId === post.id}
-											<button on:click={() => { deletePost(post.id); deleteConfirmId = null; }} class="rounded h-7 px-2 flex items-center justify-center text-xs font-medium active:scale-90 transition text-white bg-red-500 hover:bg-red-600">确认删除</button>
-											<button on:click={() => (deleteConfirmId = null)} class="btn-plain rounded h-7 px-2 flex items-center justify-center text-xs font-medium active:scale-90 transition">取消</button>
-										{:else}
-											<button on:click={() => (deleteConfirmId = post.id)} class="rounded h-7 px-2 flex items-center justify-center text-xs font-medium active:scale-90 transition text-red-500 hover:bg-red-500/10">删除</button>
-										{/if}
+									<button on:click={() => { deleteTargetId = post.id; deleteTargetTitle = post.title; showDeleteConfirm = true; }} class="rounded h-7 px-2 flex items-center justify-center text-xs font-medium active:scale-90 transition text-red-500 hover:bg-red-500/10">删除</button>
 									</div>
 								</td>
 							</tr>
@@ -898,12 +895,7 @@ $: selectedCount = selectedIds.size;
 									<div class="flex items-center gap-1 mt-2">
 										<button on:click={() => editPost(post.id)} class="btn-plain rounded h-7 px-2 text-xs font-medium active:scale-90 transition">编辑</button>
 										<button on:click={() => viewPost(post.id)} class="btn-plain rounded h-7 px-2 text-xs font-medium active:scale-90 transition">查看</button>
-										{#if deleteConfirmId === post.id}
-											<button on:click={() => { deletePost(post.id); deleteConfirmId = null; }} class="rounded h-7 px-2 text-xs font-medium active:scale-90 transition text-white bg-red-500">确认删除</button>
-											<button on:click={() => (deleteConfirmId = null)} class="btn-plain rounded h-7 px-2 text-xs font-medium active:scale-90 transition">取消</button>
-										{:else}
-											<button on:click={() => (deleteConfirmId = post.id)} class="rounded h-7 px-2 text-xs font-medium active:scale-90 transition text-red-500">删除</button>
-										{/if}
+									<button on:click={() => { deleteTargetId = post.id; deleteTargetTitle = post.title; showDeleteConfirm = true; }} class="rounded h-7 px-2 text-xs font-medium active:scale-90 transition text-red-500">删除</button>
 										<button on:click={() => startEditCategory(post.id, post.category)} class="btn-plain rounded h-7 px-2 text-xs font-medium active:scale-90 transition">改分类</button>
 									</div>
 									{#if editingCategoryFor === post.id}
@@ -936,12 +928,7 @@ $: selectedCount = selectedIds.size;
 <style>
 .del-modal-overlay {
 	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	width: 100vw;
-	height: 100vh;
+	inset: 0;
 	z-index: 2147483647;
 	display: flex;
 	align-items: center;
@@ -1060,6 +1047,20 @@ $: selectedCount = selectedIds.size;
 			<div class="del-modal-actions">
 				<button on:click={batchDelete} class="del-modal-btn del-modal-btn-danger">确认删除</button>
 				<button on:click={() => (showBatchDeleteConfirm = false)} class="del-modal-btn del-modal-btn-cancel">取消</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Single Delete Confirm -->
+{#if showDeleteConfirm}
+	<div class="del-modal-overlay" on:click|self={() => (showDeleteConfirm = false)}>
+		<div class="del-modal-card">
+			<h2 class="del-modal-title">确认删除</h2>
+			<p class="del-modal-desc">确定要删除「{deleteTargetTitle}」吗？此操作不可撤销，将通过 GitHub API 提交删除。</p>
+			<div class="del-modal-actions">
+				<button on:click={() => { if (deleteTargetId) deletePost(deleteTargetId); showDeleteConfirm = false; }} class="del-modal-btn del-modal-btn-danger">确认删除</button>
+				<button on:click={() => (showDeleteConfirm = false)} class="del-modal-btn del-modal-btn-cancel">取消</button>
 			</div>
 		</div>
 	</div>

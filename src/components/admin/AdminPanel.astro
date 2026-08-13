@@ -216,32 +216,39 @@ import { Icon } from "astro-icon/components";
       }
     }
 
-    // ===== 移动端：注入到 NavMenuPanel =====
-    var mobilePanel = document.getElementById('nav-menu-panel');
-    if (mobilePanel && !existingMobileManage) {
-      var mobileManage = document.createElement('a');
-      mobileManage.id = 'admin-mobile-manage-btn';
-      mobileManage.href = '/admin/manage/';
-      mobileManage.className = 'group flex justify-between items-center py-2 pl-3 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
-      mobileManage.innerHTML = '<div class="flex items-center transition text-black/75 dark:text-white/75 font-bold group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span></div><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="transition text-[1.25rem] text-(--primary)"><path d="M9 6l6 6-6 6"/></svg>';
-      var mobileManageWrapper = document.createElement('div');
-      mobileManageWrapper.className = 'mobile-menu-item';
-      mobileManageWrapper.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
-      mobileManageWrapper.appendChild(mobileManage);
-      mobilePanel.insertBefore(mobileManageWrapper, mobilePanel.firstChild);
+    // ===== 移动端：注入到「文章」下拉菜单的子菜单中 =====
+    var mobileDropdowns = document.querySelectorAll('[data-mobile-dropdown]');
+    var articleMobileSubmenu = null;
+
+    for (var k = 0; k < mobileDropdowns.length; k++) {
+      var subItems = mobileDropdowns[k].querySelectorAll('.mobile-submenu a');
+      for (var l = 0; l < subItems.length; l++) {
+        if (subItems[l].textContent.indexOf('\u5f52\u6863') !== -1) {
+          articleMobileSubmenu = mobileDropdowns[k].querySelector('.mobile-submenu');
+          break;
+        }
+      }
+      if (articleMobileSubmenu) break;
     }
 
-    if (mobilePanel && !existingMobileNew) {
-      var mobileNew = document.createElement('a');
-      mobileNew.id = 'admin-mobile-new-post-btn';
-      mobileNew.href = '/admin/new-post/';
-      mobileNew.className = 'group flex justify-between items-center py-2 pl-3 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
-      mobileNew.innerHTML = '<div class="flex items-center transition text-black/75 dark:text-white/75 font-bold group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span></div><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="transition text-[1.25rem] text-(--primary)"><path d="M9 6l6 6-6 6"/></svg>';
-      var mobileNewWrapper = document.createElement('div');
-      mobileNewWrapper.className = 'mobile-menu-item';
-      mobileNewWrapper.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
-      mobileNewWrapper.appendChild(mobileNew);
-      mobilePanel.insertBefore(mobileNewWrapper, mobilePanel.firstChild);
+    if (articleMobileSubmenu) {
+      if (!existingMobileManage) {
+        var mobileManage = document.createElement('a');
+        mobileManage.id = 'admin-mobile-manage-btn';
+        mobileManage.href = '/admin/manage/';
+        mobileManage.className = 'group flex justify-between items-center py-2 pl-6 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
+        mobileManage.innerHTML = '<div class="flex items-center transition text-black/60 dark:text-white/60 font-medium group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span></div>';
+        articleMobileSubmenu.insertBefore(mobileManage, articleMobileSubmenu.firstChild);
+      }
+
+      if (!existingMobileNew) {
+        var mobileNew = document.createElement('a');
+        mobileNew.id = 'admin-mobile-new-post-btn';
+        mobileNew.href = '/admin/new-post/';
+        mobileNew.className = 'group flex justify-between items-center py-2 pl-6 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
+        mobileNew.innerHTML = '<div class="flex items-center transition text-black/60 dark:text-white/60 font-medium group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span></div>';
+        articleMobileSubmenu.insertBefore(mobileNew, articleMobileSubmenu.firstChild);
+      }
     }
   }
 
