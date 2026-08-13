@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import { getGithubConfig } from "@/utils/admin-github";
+import { getGithubConfig, findPostFile } from "@/utils/admin-github";
 
 export let postId: string;
 export let collection = "posts";
@@ -16,8 +16,12 @@ function isAdminAuthed(): boolean {
     const raw = localStorage.getItem("firefly_admin_authed");
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (data && data.authed === true && Date.now() - data.time < 24 * 60 * 60 * 1000) {
-      return true;
+    if (data && data.authed === true) {
+      const authDate = new Date(data.time);
+      const today = new Date();
+      if (authDate.toDateString() === today.toDateString()) {
+        return true;
+      }
     }
     localStorage.removeItem("firefly_admin_authed");
     return false;
@@ -52,37 +56,14 @@ async function deletePost() {
       return;
     }
 
-    // 智能尝试多种路径变体
-    const basePath = `src/content/${collection}/${postId}`;
-    const pathVariants = [basePath];
-    if (!/\.(md|mdx|markdown)$/i.test(postId)) {
-      pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
-    }
+    // 使用 findPostFile 智能查找实际文件（处理 slug 与文件名不一致的情况）
+    const fileInfo = await findPostFile(postId, collection, config);
 
-    let sha: string | null = null;
-    let actualPath: string | null = null;
-
-    for (const p of pathVariants) {
-      const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${p}?ref=${config.branch}`;
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${config.token}`,
-          Accept: "application/vnd.github+json",
-        },
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        sha = data.sha;
-        actualPath = p;
-        break;
-      }
-    }
-
-    if (!sha || !actualPath) {
+    if (!fileInfo) {
       throw new Error(`无法找到文件: ${postId}（请检查仓库中是否存在此文件）`);
     }
 
-    const deleteUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${actualPath}`;
+    const deleteUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${fileInfo.path}`;
     const deleteResp = await fetch(deleteUrl, {
       method: "DELETE",
       headers: {
@@ -92,7 +73,7 @@ async function deletePost() {
       },
       body: JSON.stringify({
         message: `删除文章: ${postId}`,
-        sha,
+        sha: fileInfo.sha,
         branch: config.branch,
       }),
     });

@@ -10,8 +10,12 @@ function isAdminAuthed(): boolean {
     const raw = localStorage.getItem("firefly_admin_authed");
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (data && data.authed === true && Date.now() - data.time < 24 * 60 * 60 * 1000) {
-      return true;
+    if (data && data.authed === true) {
+      const authDate = new Date(data.time);
+      const today = new Date();
+      if (authDate.toDateString() === today.toDateString()) {
+        return true;
+      }
     }
     localStorage.removeItem("firefly_admin_authed");
     return false;

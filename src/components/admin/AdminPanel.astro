@@ -51,7 +51,6 @@ import { Icon } from "astro-icon/components";
 (function() {
   var ADMIN_HASH = '84ceb2d775bae4aacd6392a813a0ee2234d0995b1dbe3ecd4cc2fb71b8e5ea0f';
   var STORAGE_KEY = 'firefly_admin_authed';
-  var AUTH_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   function hashPassword(password) {
     return crypto.subtle.digest('SHA-256', new TextEncoder().encode(password))
@@ -67,8 +66,12 @@ import { Icon } from "astro-icon/components";
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       var data = JSON.parse(raw);
-      if (data && data.authed === true && Date.now() - data.time < AUTH_DURATION) {
-        return true;
+      if (data && data.authed === true) {
+        var authDate = new Date(data.time);
+        var today = new Date();
+        if (authDate.toDateString() === today.toDateString()) {
+          return true;
+        }
       }
       localStorage.removeItem(STORAGE_KEY);
       return false;
@@ -165,10 +168,13 @@ import { Icon } from "astro-icon/components";
   function injectAdminButtons() {
     var existingNew = document.getElementById('admin-new-post-btn');
     var existingManage = document.getElementById('admin-manage-btn');
-    if (existingNew && existingManage) return;
+    var existingMobileNew = document.getElementById('admin-mobile-new-post-btn');
+    var existingMobileManage = document.getElementById('admin-mobile-manage-btn');
+    if (existingNew && existingManage && existingMobileNew && existingMobileManage) return;
 
     if (!isAuthed()) return;
 
+    // ===== 桌面端：注入到归档下拉菜单 =====
     var dropdowns = document.querySelectorAll('[data-dropdown]');
     var articleDropdown = null;
 
@@ -183,31 +189,59 @@ import { Icon } from "astro-icon/components";
       if (articleDropdown) break;
     }
 
-    if (!articleDropdown) return;
+    if (articleDropdown) {
+      var dropdownContent = articleDropdown.querySelector('.dropdown-content');
+      if (dropdownContent) {
+        if (!existingManage) {
+          var manageItem = document.createElement('a');
+          manageItem.id = 'admin-manage-btn';
+          manageItem.href = '/admin/manage/';
+          manageItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
+          manageItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span>';
+          manageItem.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
+          manageItem.style.paddingBottom = '0.5rem';
+          dropdownContent.insertBefore(manageItem, dropdownContent.firstChild);
+        }
 
-    var dropdownContent = articleDropdown.querySelector('.dropdown-content');
-    if (!dropdownContent) return;
-
-    if (!existingManage) {
-      var manageItem = document.createElement('a');
-      manageItem.id = 'admin-manage-btn';
-      manageItem.href = '/admin/manage/';
-      manageItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
-      manageItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span>';
-      manageItem.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
-      manageItem.style.paddingBottom = '0.5rem';
-      dropdownContent.insertBefore(manageItem, dropdownContent.firstChild);
+        if (!existingNew) {
+          var newPostItem = document.createElement('a');
+          newPostItem.id = 'admin-new-post-btn';
+          newPostItem.href = '/admin/new-post/';
+          newPostItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
+          newPostItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span>';
+          newPostItem.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
+          newPostItem.style.paddingBottom = '0.5rem';
+          dropdownContent.insertBefore(newPostItem, dropdownContent.firstChild);
+        }
+      }
     }
 
-    if (!existingNew) {
-      var newPostItem = document.createElement('a');
-      newPostItem.id = 'admin-new-post-btn';
-      newPostItem.href = '/admin/new-post/';
-      newPostItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
-      newPostItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span>';
-      newPostItem.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
-      newPostItem.style.paddingBottom = '0.5rem';
-      dropdownContent.insertBefore(newPostItem, dropdownContent.firstChild);
+    // ===== 移动端：注入到 NavMenuPanel =====
+    var mobilePanel = document.getElementById('nav-menu-panel');
+    if (mobilePanel && !existingMobileManage) {
+      var mobileManage = document.createElement('a');
+      mobileManage.id = 'admin-mobile-manage-btn';
+      mobileManage.href = '/admin/manage/';
+      mobileManage.className = 'group flex justify-between items-center py-2 pl-3 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
+      mobileManage.innerHTML = '<div class="flex items-center transition text-black/75 dark:text-white/75 font-bold group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span></div><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="transition text-[1.25rem] text-(--primary)"><path d="M9 6l6 6-6 6"/></svg>';
+      var mobileManageWrapper = document.createElement('div');
+      mobileManageWrapper.className = 'mobile-menu-item';
+      mobileManageWrapper.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
+      mobileManageWrapper.appendChild(mobileManage);
+      mobilePanel.insertBefore(mobileManageWrapper, mobilePanel.firstChild);
+    }
+
+    if (mobilePanel && !existingMobileNew) {
+      var mobileNew = document.createElement('a');
+      mobileNew.id = 'admin-mobile-new-post-btn';
+      mobileNew.href = '/admin/new-post/';
+      mobileNew.className = 'group flex justify-between items-center py-2 pl-3 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
+      mobileNew.innerHTML = '<div class="flex items-center transition text-black/75 dark:text-white/75 font-bold group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span></div><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="transition text-[1.25rem] text-(--primary)"><path d="M9 6l6 6-6 6"/></svg>';
+      var mobileNewWrapper = document.createElement('div');
+      mobileNewWrapper.className = 'mobile-menu-item';
+      mobileNewWrapper.style.borderBottom = '1px solid var(--btn-regular-bg-hover, rgba(128,128,128,0.15))';
+      mobileNewWrapper.appendChild(mobileNew);
+      mobilePanel.insertBefore(mobileNewWrapper, mobilePanel.firstChild);
     }
   }
 
@@ -216,6 +250,10 @@ import { Icon } from "astro-icon/components";
     if (existingNew) existingNew.remove();
     var existingManage = document.getElementById('admin-manage-btn');
     if (existingManage) existingManage.remove();
+    var existingMobileNew = document.getElementById('admin-mobile-new-post-btn');
+    if (existingMobileNew && existingMobileNew.parentElement) existingMobileNew.parentElement.remove();
+    var existingMobileManage = document.getElementById('admin-mobile-manage-btn');
+    if (existingMobileManage && existingMobileManage.parentElement) existingMobileManage.parentElement.remove();
   }
 
   function initAdmin() {

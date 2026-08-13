@@ -5,6 +5,7 @@ import {
 	saveGithubConfig,
 	hasAdminPassword,
 	hasCloudConfig,
+	findPostFile,
 	type GithubConfig,
 } from "@/utils/admin-github";
 import {
@@ -34,8 +35,12 @@ function isAdminAuthed(): boolean {
 		const raw = localStorage.getItem("firefly_admin_authed");
 		if (!raw) return false;
 		const data = JSON.parse(raw);
-		if (data && data.authed === true && Date.now() - data.time < 24 * 60 * 60 * 1000) {
-			return true;
+		if (data && data.authed === true) {
+			const authDate = new Date(data.time);
+			const today = new Date();
+			if (authDate.toDateString() === today.toDateString()) {
+				return true;
+			}
 		}
 		localStorage.removeItem("firefly_admin_authed");
 		return false;
@@ -248,23 +253,19 @@ async function getFileSha(path: string): Promise<{ sha: string; path: string } |
 }
 
 /**
- * 尝试多种路径变体获取文件 SHA
- * post.id 可能包含或不包含扩展名，依次尝试
+ * 智能查找文件并获取 SHA
+ * post.id 可能是 frontmatter 中的 slug，而非实际文件名
  */
 async function getFileShaSmart(postId: string): Promise<{ sha: string; path: string } | null> {
-	// 1. 直接用 postId（已包含扩展名的情况）
-	let result = await getFileSha(`src/content/posts/${postId}`);
-	if (result) return result;
-
-	// 2. 尝试加 .md 扩展名
-	if (!/\.(md|mdx|markdown)$/i.test(postId)) {
-		result = await getFileSha(`src/content/posts/${postId}.md`);
-		if (result) return result;
-		// 3. 尝试加 .mdx 扩展名
-		result = await getFileSha(`src/content/posts/${postId}.mdx`);
-		if (result) return result;
-	}
-
+	if (!githubToken || !repoOwner || !repoName) return null;
+	const config: GithubConfig = {
+		token: githubToken,
+		owner: repoOwner,
+		repo: repoName,
+		branch,
+	};
+	const fileInfo = await findPostFile(postId, "posts", config);
+	if (fileInfo) return { sha: fileInfo.sha, path: fileInfo.path };
 	return null;
 }
 
@@ -283,21 +284,20 @@ async function fetchFileContent(path: string): Promise<{ content: string; sha: s
 }
 
 /**
- * 智能获取文件内容（尝试多种路径变体）
+ * 智能获取文件内容（处理 slug 与文件名不一致的情况）
  */
 async function fetchFileContentSmart(postId: string): Promise<{ content: string; sha: string; path: string } | null> {
-	// 1. 直接用 postId
-	let result = await fetchFileContent(`src/content/posts/${postId}`);
-	if (result) return { ...result, path: `src/content/posts/${postId}` };
-
-	// 2. 尝试加扩展名
-	if (!/\.(md|mdx|markdown)$/i.test(postId)) {
-		result = await fetchFileContent(`src/content/posts/${postId}.md`);
-		if (result) return { ...result, path: `src/content/posts/${postId}.md` };
-		result = await fetchFileContent(`src/content/posts/${postId}.mdx`);
-		if (result) return { ...result, path: `src/content/posts/${postId}.mdx` };
+	if (!githubToken || !repoOwner || !repoName) return null;
+	const config: GithubConfig = {
+		token: githubToken,
+		owner: repoOwner,
+		repo: repoName,
+		branch,
+	};
+	const fileInfo = await findPostFile(postId, "posts", config);
+	if (fileInfo && fileInfo.content) {
+		return { content: fileInfo.content, sha: fileInfo.sha, path: fileInfo.path };
 	}
-
 	return null;
 }
 

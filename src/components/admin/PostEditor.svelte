@@ -6,6 +6,7 @@ import {
   saveGithubConfig,
   hasAdminPassword,
   hasCloudConfig,
+  findPostFile,
   type GithubConfig,
 } from "@/utils/admin-github";
 
@@ -16,8 +17,12 @@ function isAdminAuthed(): boolean {
     const raw = localStorage.getItem("firefly_admin_authed");
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (data && data.authed === true && Date.now() - data.time < 24 * 60 * 60 * 1000) {
-      return true;
+    if (data && data.authed === true) {
+      const authDate = new Date(data.time);
+      const today = new Date();
+      if (authDate.toDateString() === today.toDateString()) {
+        return true;
+      }
     }
     localStorage.removeItem("firefly_admin_authed");
     return false;
@@ -153,9 +158,6 @@ onMount(async () => {
     repoOwner = config.owner;
     repoName = config.repo;
     branch = config.branch;
-    console.log("[PostEditor] GitHub 配置已加载");
-  } else {
-    console.warn("[PostEditor] 未找到 GitHub 配置");
   }
 
   if (window.innerWidth < 768) {
@@ -171,7 +173,6 @@ onMount(async () => {
     collection = collectionParam;
   }
   if (editParam) {
-    console.log("[PostEditor] 编辑模式，postId:", editParam, "collection:", collection);
     editMode = true;
     editId = editParam;
     fileName = editParam;
@@ -189,11 +190,7 @@ function base64ToUtf8(b64: string): string {
 }
 
 async function loadPost(postId: string) {
-  console.log("[PostEditor] loadPost 开始, postId:", postId);
-  console.log("[PostEditor] GitHub 配置:", { hasToken: !!githubToken, hasOwner: !!repoOwner, hasRepo: !!repoName });
-
   if (!githubToken || !repoOwner || !repoName) {
-    console.warn("[PostEditor] GitHub 配置不完整，无法加载文章");
     showStatus("请先在设置中填写 GitHub 信息以加载文章", "error");
     showSettings = true;
     return;
@@ -203,121 +200,28 @@ async function loadPost(postId: string) {
   showStatus("正在加载文章内容...", "info");
 
   try {
-    const collectionPath = `src/content/${collection}`;
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${githubToken}`,
-      Accept: "application/vnd.github+json",
+    const config: GithubConfig = {
+      token: githubToken,
+      owner: repoOwner,
+      repo: repoName,
+      branch,
     };
 
-    // 1. 用 Trees API 获取目录下所有文件，找到匹配的实际路径
-    const treeUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/git/trees/${branch}?recursive=1`;
-    const treeResp = await fetch(treeUrl, { headers });
-    let actualPath: string | null = null;
+    const fileInfo = await findPostFile(postId, collection, config);
 
-    if (treeResp.ok) {
-      const treeData = await treeResp.json();
-      if (treeData.tree) {
-        const prefix = `${collectionPath}/`;
-        // 收集该 collection 下所有 md/mdx 文件的相对路径
-        const files: string[] = [];
-        for (const item of treeData.tree) {
-          if (item.type !== "blob") continue;
-          if (!item.path.startsWith(prefix)) continue;
-          if (!/\.(md|mdx)$/i.test(item.path)) continue;
-          files.push(item.path);
-        }
-
-        // 去除 postId 中的扩展名（如果有）
-        const postIdNoExt = postId.replace(/\.(md|mdx|markdown)$/i, "");
-        // postId 可能包含子目录路径（如 subdir/my-post）
-        const postIdBasename = postIdNoExt.split("/").pop() || postIdNoExt;
-
-        // 归一化函数：去除所有标点符号、空格、特殊字符，转小写
-        // 用于匹配 Astro 生成的 id（会去除 ：[]- 等字符并转小写）
-        const normalize = (s: string): string =>
-          s.toLowerCase().replace(/[\s\-_：:.\[\]()（）【】{}<>《》"'#!?*,;|/\\]+/g, "");
-
-        const postIdNorm = normalize(postIdBasename);
-
-        // 多级匹配策略
-        // 1) 完整路径直接匹配（大小写敏感）
-        for (const f of files) {
-          if (f === `${prefix}${postIdNoExt}.md` || f === `${prefix}${postIdNoExt}.mdx`) {
-            actualPath = f;
-            break;
-          }
-        }
-        // 2) 仅文件名匹配（大小写敏感，不含目录）
-        if (!actualPath) {
-          for (const f of files) {
-            const fileBasename = f.split("/").pop() || "";
-            if (fileBasename === `${postIdBasename}.md` || fileBasename === `${postIdBasename}.mdx`) {
-              actualPath = f;
-              break;
-            }
-          }
-        }
-        // 3) postId 本身就是完整相对路径（含扩展名）
-        if (!actualPath) {
-          for (const f of files) {
-            if (f === `${prefix}${postId}`) {
-              actualPath = f;
-              break;
-            }
-          }
-        }
-        // 4) 归一化匹配：去除标点和大小写差异后比较
-        //    解决 Astro id 与实际文件名不一致的问题
-        //    例如：题解：P15524-[ROIR...].md → 题解p15524roir...
-        if (!actualPath && postIdNorm) {
-          for (const f of files) {
-            const fileBasename = f.split("/").pop() || "";
-            const fileNoExt = fileBasename.replace(/\.(md|mdx)$/i, "");
-            const fileNorm = normalize(fileNoExt);
-            if (fileNorm === postIdNorm) {
-              actualPath = f;
-              break;
-            }
-          }
-        }
-      }
+    if (!fileInfo || !fileInfo.content) {
+      throw new Error(
+        `无法找到文件: ${postId}（在 src/content/${collection} 目录下未找到匹配文件）`,
+      );
     }
-
-    // 2. 如果 Trees API 找到了实际路径，直接用；否则回退到旧逻辑
-    const pathVariants: string[] = [];
-    if (actualPath) {
-      pathVariants.push(actualPath);
-    } else {
-      const basePath = `${collectionPath}/${postId}`;
-      pathVariants.push(basePath);
-      if (!/\.(md|mdx|markdown)$/i.test(postId)) {
-        pathVariants.push(`${basePath}.md`, `${basePath}.mdx`);
-      }
-    }
-
-    let data: any = null;
-    for (const p of pathVariants) {
-      const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${p}?ref=${branch}`;
-      const resp = await fetch(url, { headers });
-      if (resp.ok) {
-        data = await resp.json();
-        break;
-      }
-    }
-
-    if (!data) {
-      throw new Error(`无法找到文件: ${postId}（在 ${collectionPath} 目录下未找到匹配文件）`);
-    }
-
-    console.log("[PostEditor] 找到文件:", data.path, "大小:", data.size);
 
     // 从 API 返回的路径中提取正确的文件名（保留原始扩展名）
-    if (data.path) {
-      const pathParts = data.path.split("/");
+    if (fileInfo.path) {
+      const pathParts = fileInfo.path.split("/");
       fileName = pathParts[pathParts.length - 1];
     }
 
-    const raw = base64ToUtf8(data.content);
+    const raw = fileInfo.content;
 
     const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
     if (fmMatch) {
@@ -366,12 +270,9 @@ async function loadPost(postId: string) {
     }
 
     saveStatus = "";
-    console.log("[PostEditor] 文章加载成功, title:", title, "content length:", content.length);
     showStatus(`已加载文章: ${title}`, "success");
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[PostEditor] 加载文章失败:", e);
-    showStatus(`加载失败: ${msg}`, "error");
+    showStatus(`加载失败: ${e instanceof Error ? e.message : String(e)}`, "error");
   }
 
   isLoadingPost = false;
@@ -577,12 +478,11 @@ async function saveToGithub() {
 function showStatus(msg: string, type: "info" | "success" | "error") {
   saveStatus = msg;
   saveStatusType = type;
-  if (type === "success") {
+  if (type !== "info") {
     setTimeout(() => {
       saveStatus = "";
     }, 5000);
   }
-  // error 类型不自动消失，需要用户手动关闭或进行其他操作
 }
 
 function logout() {
@@ -646,33 +546,6 @@ afterUpdate(() => {
         </button>
       </div>
     </div>
-
-    <!-- Status Banner (prominent, at top) -->
-    {#if saveStatus}
-      <div
-        class="mb-3 px-4 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-between gap-3 {saveStatusType === 'success'
-          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-          : saveStatusType === 'error'
-            ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-            : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'}"
-      >
-        <div class="flex items-center gap-2">
-          {#if saveStatusType === 'info'}
-            <span class="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
-          {/if}
-          <span>{saveStatus}</span>
-        </div>
-        {#if saveStatusType !== 'info'}
-          <button
-            on:click={() => (saveStatus = '')}
-            class="text-current opacity-60 hover:opacity-100 transition flex-shrink-0"
-            aria-label="关闭提示"
-          >
-            ✕
-          </button>
-        {/if}
-      </div>
-    {/if}
 
     <!-- Settings Panel -->
     {#if showSettings}
@@ -949,15 +822,7 @@ afterUpdate(() => {
     </div>
 
     <!-- Editor / Preview -->
-    <div class="flex gap-4 mb-4 relative" style="height: calc(100vh - 28rem); min-height: 300px;">
-      {#if isLoadingPost}
-        <div class="absolute inset-0 z-10 flex items-center justify-center bg-(--card-bg)/80 backdrop-blur-sm rounded-xl">
-          <div class="flex flex-col items-center gap-3">
-            <span class="inline-block w-8 h-8 border-2 border-(--primary) border-t-transparent rounded-full animate-spin"></span>
-            <span class="text-sm text-neutral-400">正在加载文章内容...</span>
-          </div>
-        </div>
-      {/if}
+    <div class="flex gap-4 mb-4" style="height: calc(100vh - 28rem); min-height: 300px;">
       <!-- Editor -->
       <div
         class="card-base rounded-xl overflow-hidden flex-1 {viewMode === 'preview' ? 'hidden md:flex' : 'flex'} flex-col"
@@ -989,6 +854,19 @@ afterUpdate(() => {
         </div>
       </div>
     </div>
+
+    <!-- Status -->
+    {#if saveStatus}
+      <div
+        class="mb-3 px-4 py-2 rounded-lg text-sm font-medium transition {saveStatusType === 'success'
+          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+          : saveStatusType === 'error'
+            ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+            : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'}"
+      >
+        {saveStatus}
+      </div>
+    {/if}
 
     <!-- Actions -->
     <div class="flex flex-wrap gap-3 mb-8">

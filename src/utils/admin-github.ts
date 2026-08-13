@@ -12,6 +12,139 @@ export interface GithubConfig {
 	branch: string;
 }
 
+export interface PostFileInfo {
+	path: string;
+	sha: string;
+	content?: string;
+}
+
+/**
+ * 通过 postId（entry.id）查找实际的 GitHub 文件
+ *
+ * Astro v5 glob loader 的 entry.id 生成规则：
+ * - 如果 frontmatter 有 slug 字段，entry.id = slug 值
+ * - 否则，entry.id = 文件名（不含扩展名，相对于 base 目录）
+ *
+ * 因此 postId 可能不是实际文件名，需要智能匹配：
+ * 1. 先用 Trees API 获取所有文件，尝试文件名直接匹配
+ * 2. 如果没找到，逐个读取文件内容，检查 frontmatter 中的 slug 字段
+ */
+export async function findPostFile(
+	postId: string,
+	collection: string,
+	config: GithubConfig,
+): Promise<PostFileInfo | null> {
+	const collectionPath = `src/content/${collection}`;
+	const authHeaders: Record<string, string> = {
+		Authorization: `Bearer ${config.token}`,
+		Accept: "application/vnd.github+json",
+	};
+	const anonHeaders: Record<string, string> = {
+		Accept: "application/vnd.github+json",
+	};
+
+	function removeExt(name: string): string {
+		return name.replace(/\.(md|mdx|markdown)$/i, "");
+	}
+
+	function b64ToUtf8(b64: string): string {
+		const binary = atob(b64.replace(/\n/g, ""));
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		return new TextDecoder().decode(bytes);
+	}
+
+	function extractFrontmatterSlug(fileContent: string): string | null {
+		const m = fileContent.match(/^---\n([\s\S]*?)\n---/);
+		if (!m) return null;
+		for (const line of m[1].split("\n")) {
+			const sm = line.match(/^slug:\s*(.+)$/);
+			if (sm) {
+				let v = sm[1].trim();
+				if (
+					(v.startsWith('"') && v.endsWith('"')) ||
+					(v.startsWith("'") && v.endsWith("'"))
+				) {
+					v = v.slice(1, -1);
+				}
+				return v;
+			}
+		}
+		return null;
+	}
+
+	async function fetchContents(
+		path: string,
+	): Promise<{ sha: string; content: string } | null> {
+		const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}?ref=${config.branch}`;
+		const resp = await fetch(url, { headers: authHeaders });
+		if (!resp.ok) return null;
+		const data = await resp.json();
+		return { sha: data.sha, content: b64ToUtf8(data.content) };
+	}
+
+	const postIdNoExt = removeExt(postId);
+
+	// 1. 用 Trees API 获取文件列表
+	const treeUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/trees/${config.branch}?recursive=1`;
+	let fileItems: { path: string }[] = [];
+
+	for (const hdr of [authHeaders, anonHeaders]) {
+		if (fileItems.length > 0) break;
+		try {
+			const resp = await fetch(treeUrl, { headers: hdr });
+			if (!resp.ok) continue;
+			const data = await resp.json();
+			if (!data.tree) continue;
+			const prefix = `${collectionPath}/`;
+			fileItems = data.tree
+				.filter(
+					(item: any) =>
+						item.type === "blob" &&
+						item.path.startsWith(prefix) &&
+						/\.(md|mdx)$/i.test(item.path),
+				)
+				.map((item: any) => ({ path: item.path }));
+		} catch {
+			// continue to next header set
+		}
+	}
+
+	if (fileItems.length === 0) {
+		// 回退：直接用 postId 作为文件名尝试
+		const result = await fetchContents(`${collectionPath}/${postIdNoExt}.md`);
+		if (result)
+			return {
+				path: `${collectionPath}/${postIdNoExt}.md`,
+				sha: result.sha,
+				content: result.content,
+			};
+		return null;
+	}
+
+	// 2. 尝试文件名直接匹配（快速路径）
+	for (const file of fileItems) {
+		const basename = file.path.split("/").pop() || "";
+		if (removeExt(basename) === postIdNoExt) {
+			const result = await fetchContents(file.path);
+			if (result)
+				return { path: file.path, sha: result.sha, content: result.content };
+		}
+	}
+
+	// 3. 尝试 frontmatter slug 匹配（慢速路径，逐个检查）
+	for (const file of fileItems) {
+		const result = await fetchContents(file.path);
+		if (!result) continue;
+		const slug = extractFrontmatterSlug(result.content);
+		if (slug && slug === postIdNoExt) {
+			return { path: file.path, sha: result.sha, content: result.content };
+		}
+	}
+
+	return null;
+}
+
 interface CloudConfig {
 	owner: string;
 	repo: string;
