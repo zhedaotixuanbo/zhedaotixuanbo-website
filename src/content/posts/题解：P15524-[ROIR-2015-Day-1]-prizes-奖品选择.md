@@ -1,9 +1,7 @@
 ---
-title:  题解：P15524 [ROIR 2015 Day 1] prizes 奖品选择
-published: 2026-03-21
-updated: 2026-03-21
-tags: [算法：枚举, 算法：前缀和, 洛谷]
-category: 题解
+title: 题解：P15524 [ROIR 2015 Day 1] prizes 奖品选择
+published: 2026-08-13
+updated: 2026-08-13
 licenseName: CC BY-NC-SA 4.0
 licenseUrl: https://creativecommons.org/licenses/by-nc-sa/4.0/
 ---
@@ -81,4 +79,3 @@ int main(){
 	return 0;
 }
 ```
-:::
