@@ -197,7 +197,7 @@ import { Icon } from "astro-icon/components";
           manageItem.id = 'admin-manage-btn';
           manageItem.href = '/admin/manage/';
           manageItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
-          manageItem.textContent = '\u7ba1\u7406';
+          manageItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span>';
           dropdownContent.insertBefore(manageItem, dropdownContent.firstChild);
         }
 
@@ -206,7 +206,7 @@ import { Icon } from "astro-icon/components";
           newPostItem.id = 'admin-new-post-btn';
           newPostItem.href = '/admin/new-post/';
           newPostItem.className = 'dropdown-item focus-ring-inset h-10 flex transition whitespace-nowrap items-center justify-start! w-full btn-plain scale-animation rounded-lg px-3 font-medium active:scale-95 mb-0.5';
-          newPostItem.textContent = '\u65b0\u5efa';
+          newPostItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.75rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span>';
           dropdownContent.insertBefore(newPostItem, dropdownContent.firstChild);
         }
       }
@@ -233,7 +233,7 @@ import { Icon } from "astro-icon/components";
         mobileManage.id = 'admin-mobile-manage-btn';
         mobileManage.href = '/admin/manage/';
         mobileManage.className = 'group flex justify-between items-center py-2 pl-6 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
-        mobileManage.innerHTML = '<div class="flex items-center transition text-black/60 dark:text-white/60 font-medium group-hover:text-(--primary) group-active:text-(--primary)"><span>\u7ba1\u7406</span></div>';
+        mobileManage.innerHTML = '<div class="flex items-center transition text-black/60 dark:text-white/60 font-medium group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M3 5v14h18V5H3zm16 2v.01H5V7h14zm0 4v.01H5v-2h14v2zm0 4v.01H5v-2h14v2zM7 15v.01H5v-2h2v2z"/></svg><span>\u7ba1\u7406</span></div>';
         articleMobileSubmenu.insertBefore(mobileManage, articleMobileSubmenu.firstChild);
       }
 
@@ -242,7 +242,7 @@ import { Icon } from "astro-icon/components";
         mobileNew.id = 'admin-mobile-new-post-btn';
         mobileNew.href = '/admin/new-post/';
         mobileNew.className = 'group flex justify-between items-center py-2 pl-6 pr-1 rounded-lg gap-8 hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) transition';
-        mobileNew.innerHTML = '<div class="flex items-center transition text-black/60 dark:text-white/60 font-medium group-hover:text-(--primary) group-active:text-(--primary)"><span>\u65b0\u5efa</span></div>';
+        mobileNew.innerHTML = '<div class="flex items-center transition text-black/60 dark:text-white/60 font-medium group-hover:text-(--primary) group-active:text-(--primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right:0.5rem;flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg><span>\u65b0\u5efa</span></div>';
         articleMobileSubmenu.insertBefore(mobileNew, articleMobileSubmenu.firstChild);
       }
     }
